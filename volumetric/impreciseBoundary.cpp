@@ -51,7 +51,7 @@ typedef NotPointPredicate<Z2i::DigitalSet> NotPredicate;
 typedef ExactPredicateLpSeparableMetric<Z2i::Space, 2> L2Metric;
 typedef VoronoiMap<Z2i::Space, NotPredicate, L2Metric > Voronoi2D;
 
-void readData(char *filename,vector<int>&x ,vector<int>&y ,vector<int>&noiseLevel){
+void readData(char *filename,vector<int>&x ,vector<int>&y ,vector<int>&noiseLevel,vector<int>&freeman){
 	ifstream data(filename);
 	int entierPoubelle;
 	char buffer[150];
@@ -63,6 +63,7 @@ void readData(char *filename,vector<int>&x ,vector<int>&y ,vector<int>&noiseLeve
 			for (int i = 0 ; i<5 ; ++i){
 				ss.getline(buffer,100,' ');
 				if(i==1){noiseLevel.push_back(atoi(buffer));}
+				if(i==2){freeman.push_back(atoi(buffer));}
 				if(i==3){x.push_back(atoi(buffer));}
 				if(i==4){y.push_back(atoi(buffer));}
 				else {entierPoubelle = atoi(buffer);}  
@@ -97,6 +98,71 @@ void constructImage(vector< Z2i::Point >& contour,Image& image){
 	
 }
 
+void contourBallReduced(vector<int>& x,vector<int>& y,vector<int>& noiseLevel,vector<int>& freeman,int maxX,int maxY){
+	Z2i::Point lower(0,0);
+	Z2i::Point upper(maxX,maxY);
+	Image image ( Z2i::Domain(lower,upper));
+
+	for ( Image::Iterator it = image.begin(), itend = image.end();it != itend; ++it)
+    		(*it)=128;
+	int cpt = 0;
+	for (int i =1;i<x.size()-1;i++){
+		if ( (noiseLevel[i] >= 2) &&  
+		     (noiseLevel[i] > noiseLevel[i-1]) && 
+		     (noiseLevel[i] > noiseLevel[i+1])) cpt ++;
+	}
+
+	if ((noiseLevel[0] >= 2) && 
+	(noiseLevel[0] > noiseLevel[x.size()-1]) && 
+	(noiseLevel[0] > noiseLevel[1])) cpt ++;
+	
+	if ((noiseLevel[x.size()-1] >= 2) &&
+	(noiseLevel[x.size()-1] > noiseLevel[x.size()-2]) && 
+	(noiseLevel[x.size()-1] > noiseLevel[0])) cpt ++;
+
+	cout << "Nombre de cas interessant : " << cpt << " sur " << x.size() << endl; 
+	cout << "Soit un Ratio de "<< 100 * cpt / x.size() << "%" <<  endl;
+		/*if (freeman[i-1] == freeman[i]){
+			if (noiseLevel[i] == 1 || (noiseLevel[i-1] == 1 && noiseLevel[i+1] == 1) ){
+				image.setValue( Z2i::Point(x[i],y[i]),0 );
+			}
+			else{
+				if ((noiseLevel[i] <= noiseLevel[i-1]) && (noiseLevel[i] <= noiseLevel[i+1] ) ){
+					for (int a = max(0,x[i]-(noiseLevel[i]-1) ) ; a <= min(x[i]+(noiseLevel[i]-1),maxX); a++ ){
+					for (int b = max(0,y[i]-(noiseLevel[i]-1) ) ; b <= min(y[i]+(noiseLevel[i]-1),maxY); b++ ){
+						image.setValue( Z2i::Point(a,maxY-b+20),0);
+					}
+					}
+				}
+				if ((noiseLevel[i] > noiseLevel[i-1]) && 
+				    (noiseLevel[i] > noiseLevel[i+1] ) && 
+				    (noiseLevel[i-1] ==  noiseLevel[i+1]) ){
+				for (int a = max(0,x[i-1]-(noiseLevel[i-1]-1) ) ; a <= min(x[i+1]+(noiseLevel[i-1]-1),maxX); a++ ){
+				for (int b = max(0,y[i-1]-(noiseLevel[i-1]-1) ) ; b <= min(y[i+1]+(noiseLevel[i-1]-1),maxY); b++ ){
+					image.setValue( Z2i::Point(a,maxY-b+20),0);
+				}
+				}
+				for (int a = max(0,x[i+1]-(noiseLevel[i+1]-1) ) ; a <= min(x[i+1]+(noiseLevel[i+1]-1),maxX); a++ ){
+				for (int b = max(0,y[i+1]-(noiseLevel[i+1]-1) ) ; b <= min(y[i+1]+(noiseLevel[i+1]-1),maxY); b++ ){
+					image.setValue( Z2i::Point(a,maxY-b+20),0);
+				}
+				}
+				}
+			}
+		}
+		else {
+			if (noiseLevel[i] == 1 ){
+				image.setValue( Z2i::Point(x[i],y[i]),0 );
+			}
+			if (noiseLevel[i-1] == 1 && noiseLevel[i+1] == 1) ){
+				image.setValue( Z2i::Point(x[i],y[i]),0 );
+				//image.setValue( Z2i::Point(x[i],y[i]),0 );
+			}
+			
+		}
+	} */
+}
+
 void constructImageBothContour(vector< Z2i::Point >& contour1,vector< Z2i::Point >& contour2,Image& image){
 	for ( Image::Iterator it = image.begin(), itend = image.end();it != itend; ++it)
     		(*it)=128;
@@ -126,7 +192,7 @@ void computeDT(Image& image,char *outputfile){
 	board.saveSVG ( outputfile );
 }
 
-Image imageDT(Image& image,int maxX, int maxY){
+Image imageDT(Image& image,unsigned int maxX, unsigned int maxY){
 	PointPredicate predicate(image,0);
 	Z2i::Point lower(0,0);
 	Z2i::Point upper(maxX,maxY);
@@ -216,6 +282,46 @@ void computeVoronoiMap(Image& image,vector< vector< Z2i::Point > >& contours,cha
 	board.saveSVG(outputfileCells);
 } 
 
+void computeDTAverage(Image & image1,Image & image2,int maxX,int maxY,char* outputfile){
+	Z2i::Point lower(0,0);
+	Z2i::Point upper(maxX,maxY);
+	Image DTAv(Z2i::Domain(lower,upper));
+	Board2D boardAv;
+	for (int i = 0;i<=maxX; i++){
+		for (int j = 0;j<=maxY; j++){
+			Z2i::Point p(i,j);
+			DTAv.setValue(p,(image1(p)+image2(p))/2);
+		} 
+	} 
+
+	unsigned int maxAv=0;
+  	for ( Image::iterator it = DTAv.begin(), itend = DTAv.end();it != itend; ++it)
+    		if ( (*it) > maxAv)  maxAv = (*it);
+
+	Display2DFactory::drawImage<HueTwice>(boardAv, DTAv, (unsigned int)0, maxAv +1);
+	boardAv.saveSVG(outputfile);
+}
+
+void computeDTDiff(Image & image1,Image & image2,int maxX,int maxY,char* outputfile){
+	Z2i::Point lower(0,0);
+	Z2i::Point upper(maxX,maxY);
+	Image DTDiff(Z2i::Domain(lower,upper));
+	Board2D boardDiff;
+	for (unsigned int i = 0;i<maxX; i++){
+		for (unsigned int j = 0;j<maxY; j++){
+			Z2i::Point p(i,j);
+			if (image1(p)>image2(p)) DTDiff.setValue(p,image1(p)-image2(p));
+			else DTDiff.setValue(p,image2(p)-image1(p));
+		} 
+	} 
+
+	unsigned int maxDiff=0;
+  	for ( Image::iterator it = DTDiff.begin(), itend = DTDiff.end();it != itend; ++it)
+    		if ( (*it) > maxDiff)  maxDiff = (*it);
+
+	Display2DFactory::drawImage<Gray>(boardDiff, DTDiff, (unsigned int)0, maxDiff +1);
+	boardDiff.saveSVG(outputfile);
+}
 
 int main(int argc,char **argv){
 	if (argc != 2){
@@ -226,10 +332,12 @@ int main(int argc,char **argv){
 	vector<int>x ;
 	vector<int>y ;
 	vector<int>noiseLevel;
-	readData(filename,x,y,noiseLevel);// récupération des données de contours 
+	vector<int>freeman;
+	readData(filename,x,y,noiseLevel,freeman);// récupération des données de contours 
 	x.pop_back();
 	y.pop_back();
 	noiseLevel.pop_back();
+	freeman.pop_back();
 
 	//boite englobante
 	int valMaxX = x[0];
@@ -304,24 +412,14 @@ int main(int argc,char **argv){
 	computeVoronoiMap(image2,contours[1],"../../../VM_contour2.svg","../../../VMCells_contour2.svg"); 
 	computeVoronoiMap(imageCB,contours,"../../../VM_contourBoth.svg","../../../VMCells_contourBoth.svg"); 
 
-	//Calcul de la moyenne des 2DT
-	Image DT1 = imageDT(image1,valMaxX,valMaxY);
-	Image DT2 = imageDT(image2,valMaxX,valMaxY);
-	Image DTAv(Z2i::Domain(lower,upper));
-	Image DTDiff(Z2i::Domain(lower,upper));
-	Board2D boardAv,boardDiff;
+	//Calcul de la moyenne et la différence des 2DT
+	Image DT1 = imageDT(image1,valMaxX+20,valMaxY+20);
+	Image DT2 = imageDT(image2,valMaxX+20,valMaxY+20);
+	computeDTAverage(DT1,DT2,valMaxX+20,valMaxY+20,"../../../DT_contourAv.svg");
+	computeDTDiff(DT1,DT2,valMaxX+20,valMaxY+20,"../../../DT_contourDiff.svg");
 
-	for (int i = 0;i<valMaxX; i++){
-		for (int j = 0;j<valMaxY; j++){
-			Z2i::Point p(i,j);
-			DTAv.setValue(p,(DT1(p)+DT2(p))/2);
-			DTDiff.setValue(p,abs(DT1(p)-DT2(p)) );
-		} 
-	} 
-	Display2DFactory::drawImage<Gray>(boardAv, DTAv, (unsigned int)0, (unsigned int)129);
-	Display2DFactory::drawImage<Gray>(boardDiff, DTDiff, (unsigned int)0, (unsigned int)129);
-	boardAv.saveSVG("../../../DT_contourAv.svg");
-	boardDiff.saveSVG("../../../DT_contourDiff.svg");
+	//Création d'un contour avec boules réduites
+	contourBallReduced(x,y,noiseLevel,freeman,valMaxX+20,valMaxY+20); 
 	
 	return 0; 
 }
