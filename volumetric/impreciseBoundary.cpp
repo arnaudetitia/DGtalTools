@@ -239,16 +239,100 @@ void getContours(vector< vector< Z2i::Point >  >&  contours,Grille &image,vector
 	
 	board.saveSVG ( "../../../imageBorder.svg" );
 	
-} 
+}
+
+bool isInside(Grille &image,Z2i::Point p){
+	int limX = image.domain().upperBound()[0];
+	int limY = image.domain().upperBound()[1];
+	int L=0,R=0,U=0,D=0;
+	int a,b;
+	for (int i = p[0]+1 ; i<=limX ; i++){
+		if (image(Z2i::Point(i,p[1])) == 128 ){
+			if (( image(Z2i::Point(i,p[1]+1)) == 128 ) && ( image(Z2i::Point(i,p[1]-1)) == 128 )) R++;
+			else {
+				if ( image(Z2i::Point(i,p[1]+1)) == 128 ) a = p[1]+1;
+				else a = p[1]-1;
+				while ( image(Z2i::Point(i+1,p[1])) == 128 ) i++;
+				if ( image(Z2i::Point(i,p[1]+1)) == 128 ) b = p[1]+1;
+				else b = p[1]-1;
+				if (a != b ) R++; 	 
+			}
+		}  
+	}
+	for (int i = p[0]-1 ; i>=0 ; i--){
+		if (image(Z2i::Point(i,p[1])) == 128 ){
+			if (( image(Z2i::Point(i,p[1]+1)) == 128 ) && ( image(Z2i::Point(i,p[1]-1)) == 128 )) L++;
+			else {
+				if ( image(Z2i::Point(i,p[1]+1)) == 128 ) a = p[1]+1;
+				else a = p[1]-1;
+				while ( image(Z2i::Point(i-1,p[1])) == 128 ) i--;
+				if ( image(Z2i::Point(i,p[1]+1)) == 128 ) b = p[1]+1;
+				else b = p[1]-1;
+				if (a != b ) L++; 	 
+			}
+		}  
+	}
+	for (int i = p[1]+1 ; i<=limY ; i++){
+		if (image(Z2i::Point(p[0],i)) == 128 ){
+			if (( image(Z2i::Point(p[0]+1,i)) == 128 ) && ( image(Z2i::Point(p[0]-1,i)) == 128 )) D++;
+			else {
+				if ( image(Z2i::Point(p[0]+1,i)) == 128 ) a = p[0]+1;
+				else a = p[0]-1;
+				while ( image(Z2i::Point(p[0],i+1)) == 128 ) i++;
+				if ( image(Z2i::Point(p[0]+1,i)) == 128 ) b = p[0]+1;
+				else b = p[0]-1;
+				if (a != b ) D++; 	 
+			}
+		}  
+	}
+	for (int i = p[1]-1 ; i>=0 ; i--){
+		if (image(Z2i::Point(p[0],i)) == 128 ){
+			if (( image(Z2i::Point(p[0]+1,i)) == 128 ) && ( image(Z2i::Point(p[0]-1,i)) == 128 )) U++;
+			else {
+				if ( image(Z2i::Point(p[0]+1,i)) == 128 ) a = p[0]+1;
+				else a = p[0]-1;
+				while ( image(Z2i::Point(p[0],i-1)) == 128 ) i--;
+				if ( image(Z2i::Point(p[0]+1,i)) == 128 ) b = p[0]+1;
+				else b = p[0]-1;
+				if (a != b ) U++; 	 
+			}
+		}  
+	}
+	return ( (U%2==1) && (R%2==1) && (L%2==1) && (D%2==1) );	
+}
+
+void fill(Grille &image,Z2i::Point p){
+	int limX = image.domain().upperBound()[0];
+	int limY = image.domain().upperBound()[1];
+	for (int i =0; i<4;i++){
+		Z2i::Point pt = p+regard(i);
+		if (image(pt) == 0 && pt[0]<=limX && pt[1]<=limY) {
+			image.setValue(pt,128);
+			fill(image,pt);
+		} 
+	} 
+}  
+  
 
 void constructImage(vector< Z2i::Point >& contour,Grille& image){
 	for ( Grille::Iterator it = image.begin(), itend = image.end();it != itend; ++it)
-    		(*it)=128;
-
+    		(*it)=0;
+	 
 	for (int i=0;i<contour.size();i++){
-		image.setValue(contour[i],0);
+		image.setValue(contour[i],128);
 	}
-		
+	srand (time(NULL));
+	int limX = image.domain().upperBound()[0];
+	int limY = image.domain().upperBound()[1];
+	int x = rand()%limX,y=rand()%limY;
+	while (!(isInside(image,Z2i::Point(x,y))) || (image(Z2i::Point(x,y)) == 128 ) ) {
+		x = rand()%limX;
+		y = rand()%limY;
+	}
+	image.setValue(Z2i::Point(x,y),128);
+	fill(image,Z2i::Point(x,y)); 
+	
+	
 }
 
 void contourBallReduced(vector<int>& x,vector<int>& y,vector<int>& noiseLevel,vector<int>& freeman,int maxX,int maxY){
@@ -609,7 +693,6 @@ int main(int argc,char **argv){
 	
   	Grille image ( Z2i::Domain(lower,upper));
 	Grille imageN ( Z2i::Domain(lower,upper));
-	Grille g( Z2i::Domain(lower,upper));
 
 	for ( Grille::Iterator it = image.begin(), itend = image.end();it != itend; ++it)
     		(*it)=128;
@@ -623,16 +706,24 @@ int main(int argc,char **argv){
 		}
 	}
 
-	for ( Grille::Iterator it = g.begin(), itend = g.end();it != itend; ++it)
-    		(*it)=0;
+	
+	Z2i::Domain domain(Z2i::Point(0,0),image.domain().upperBound());
+	Z2i::DigitalSet set(domain);
 
 	for (int i=0;i<x.size();i++){
-		g.setValue( Z2i::Point(x[i],valMaxY-y[i]+20),noiseLevel[i]);
+		set.insertNew(Z2i::Point(x[i],valMaxY-y[i]+20));
 	}
+
+	DigitalSetDomain<Z2i::DigitalSet> setDomain(set); 
+	MapImage g(setDomain);
+	for (int i=0;i<x.size();i++){
+		g.setValue( Z2i::Point(x[i],valMaxY-y[i]+20),noiseLevel[i]*noiseLevel[i]);
+	}
+
 	// affichage de l'image dans un svg	
 	
 	
-	Board2D board,boardN;
+	Board2D board,boardN,boardG;
 	Display2DFactory::drawImage<Gray>(board, image, (unsigned int)0, (unsigned int)129);
 	board.saveSVG("../../../monResultat.svg");
 	for (int i = 0; i < image.domain().upperBound()[0];i++){
@@ -688,10 +779,10 @@ int main(int argc,char **argv){
 	computeDTDiff(DT1,DT2,valMaxX+20,valMaxY+20,"../../../DT_contourDiff.svg");
 
 	// Calcul de la DT inverse
-	computeReverseDT(g,"../../../RDT_contour1.svg"); 
+	computeReverseDT(DT1,"../../../RDT_contour1.svg"); 
 
 	// Calcul de l'axe médian
-	computeMA(DTN,"../../../MA_contour1.svg");
+	computeMA(DT1,"../../../MA_contour1.svg");
 
 	//Création d'un contour avec boules réduites
 	//contourBallReduced(x,y,noiseLevel,freeman,valMaxX+20,valMaxY+20); 
