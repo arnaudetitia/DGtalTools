@@ -30,6 +30,7 @@
 #include "DGtal/images/imagesSetsUtils/ImageFromSet.h"
 #include "DGtal/images/imagesSetsUtils/SetFromImage.h"
 #include "DGtal/images/ImageContainerBySTLVector.h"
+#include "DGtal/images/CImage.h"
 
 #include "DGtal/io/colormaps/GrayscaleColorMap.h"
 #include "DGtal/io/colormaps/HueShadeColorMap.h"
@@ -40,6 +41,8 @@
 #include "DGtal/geometry/volumes/distance/DistanceTransformation.h"
 #include "DGtal/geometry/helpers/ContourHelper.h"
 #include "DGtal/geometry/volumes/distance/ReverseDistanceTransformation.h"
+#include "DGtal/geometry/volumes/distance/ReducedMedialAxis.h"
+#include "DGtal/geometry/volumes/distance/PowerMap.h"
 
 #include "DGtal/io/colormaps/HueShadeColorMap.h"
 #include "DGtal/io/boards/Board2D.h"
@@ -53,9 +56,10 @@ typedef SpaceND<2> Z2;
 typedef HyperRectDomain< Z2 > Domain; 
 typedef DigitalSetSelector < Domain, BIG_DS + HIGH_BEL_DS >::Type DigitalSet;
 typedef GrayscaleColorMap<unsigned char> Gray;
-typedef ImageSelector<Z2i::Domain, unsigned int>::Type Image;
-typedef IntervalThresholder<Image::Value> Binarizer; 
-typedef SimpleThresholdForegroundPredicate<Image> PointPredicate;
+typedef ImageSelector<Z2i::Domain, unsigned int>::Type Grille;// C'est une Image mais c'est pour éviter les conflit avec le fichier  ReducedMedialAxis.h
+typedef ImageContainerBySTLMap<DigitalSetDomain<Z2i::DigitalSet> , DGtal::int64_t> MapImage;
+typedef IntervalThresholder<Grille::Value> Binarizer; 
+typedef SimpleThresholdForegroundPredicate<Grille> PointPredicate;
 typedef DistanceTransformation<Z2i::Space, PointPredicate, Z2i::L2Metric> DTL2;
 typedef DistanceTransformation<Z2i::Space, PointPredicate, Z2i::L2Metric> VML2;
 typedef HueShadeColorMap<long int, 2> HueTwice;
@@ -72,7 +76,7 @@ typedef DigitalTopology< Adj4, Adj8 > DT4_8;
 typedef Object<DT4_8, DigitalSet> ObjectType;
 typedef Object<DT4_8, DigitalSet> ObjectType48;
 typedef typename DigitalSet::ConstIterator DigitalSetConstIterator;
-typedef ReverseDistanceTransformation< DistanceTransformation<Z2i::Space, PointPredicate, L2Metric > , Z2i::L2PowerMetric > RDT;
+typedef ReverseDistanceTransformation< Grille , Z2i::L2PowerMetric > RDT;
 
 void readData(char *filename,vector<int>&x ,vector<int>&y ,vector<int>&noiseLevel,vector<int>&freeman){
 	ifstream data(filename);
@@ -108,7 +112,7 @@ Z2i::Point regard(int i){
 	}
 }
 
-void getContours(vector< vector< Z2i::Point >  >&  contours,Image &image,vector<int> & x,vector<int> & y,vector<int> &noise){
+void getContours(vector< vector< Z2i::Point >  >&  contours,Grille &image,vector<int> & x,vector<int> & y,vector<int> &noise){
 	
 	DigitalSet image_set ( image.domain() );
 	int maxX = image.domain().upperBound()[0];
@@ -124,9 +128,9 @@ void getContours(vector< vector< Z2i::Point >  >&  contours,Image &image,vector<
 	DT4_8 dt4_8 ( adj4, adj8, JORDAN_DT );
 	ObjectType im ( dt4_8, image_set );
 	ObjectType imageBorder = im.border();
-	Image tmp(image.domain());
+	Grille tmp(image.domain());
 	Board2D board;
-	for ( Image::Iterator it = tmp.begin(), itend = tmp.end();it != itend; ++it)
+	for ( Grille::Iterator it = tmp.begin(), itend = tmp.end();it != itend; ++it)
     		(*it)=128;
 	DigitalSetConstIterator it_end = imageBorder.end();
 	DigitalSetConstIterator it_begin = imageBorder.begin(); 
@@ -237,22 +241,22 @@ void getContours(vector< vector< Z2i::Point >  >&  contours,Image &image,vector<
 	
 } 
 
-void constructImage(vector< Z2i::Point >& contour,Image& image){
-	for ( Image::Iterator it = image.begin(), itend = image.end();it != itend; ++it)
+void constructImage(vector< Z2i::Point >& contour,Grille& image){
+	for ( Grille::Iterator it = image.begin(), itend = image.end();it != itend; ++it)
     		(*it)=128;
 
 	for (int i=0;i<contour.size();i++){
 		image.setValue(contour[i],0);
 	}
-	
+		
 }
 
 void contourBallReduced(vector<int>& x,vector<int>& y,vector<int>& noiseLevel,vector<int>& freeman,int maxX,int maxY){
 	Z2i::Point lower(0,0);
 	Z2i::Point upper(maxX,maxY);
-	Image image ( Z2i::Domain(lower,upper));
+	Grille image ( Z2i::Domain(lower,upper));
 
-	for ( Image::Iterator it = image.begin(), itend = image.end();it != itend; ++it)
+	for ( Grille::Iterator it = image.begin(), itend = image.end();it != itend; ++it)
     		(*it)=128;
 	int cpt = 0;
 	for (int i =1;i<x.size()-1;i++){
@@ -366,8 +370,8 @@ void contourBallReduced(vector<int>& x,vector<int>& y,vector<int>& noiseLevel,ve
 	} */
 }
 
-void constructImageBothContour(vector< Z2i::Point >& contour1,vector< Z2i::Point >& contour2,Image& image){
-	for ( Image::Iterator it = image.begin(), itend = image.end();it != itend; ++it)
+void constructImageBothContour(vector< Z2i::Point >& contour1,vector< Z2i::Point >& contour2,Grille& image){
+	for ( Grille::Iterator it = image.begin(), itend = image.end();it != itend; ++it)
     		(*it)=128;
 
 	for (int i=0;i<contour1.size();i++){
@@ -380,7 +384,7 @@ void constructImageBothContour(vector< Z2i::Point >& contour1,vector< Z2i::Point
 	
 }
 
-void computeDT(Image& image,char *outputfile){
+void computeDT(Grille& image,char *outputfile){
 	PointPredicate predicate(image,0);
 	DTL2 dt(image.domain(), predicate, Z2i::l2Metric);
 
@@ -395,11 +399,11 @@ void computeDT(Image& image,char *outputfile){
 	board.saveSVG ( outputfile );
 }
 
-Image imageDT(Image& image,unsigned int maxX, unsigned int maxY){
+Grille imageDT(Grille& image,unsigned int maxX, unsigned int maxY){
 	PointPredicate predicate(image,0);
 	Z2i::Point lower(0,0);
 	Z2i::Point upper(maxX,maxY);
-	Image result(Z2i::Domain(lower,upper));
+	Grille result(Z2i::Domain(lower,upper));
 	DTL2 dt(image.domain(), predicate, Z2i::l2Metric);
 
 	for (int i=0;i<maxX;i++){
@@ -411,7 +415,7 @@ Image imageDT(Image& image,unsigned int maxX, unsigned int maxY){
 	return result;
 } 
 
-void computeVoronoiMap(Image& image,vector< Z2i::Point >& contour,char *outputfile,char* outputfileCells){
+void computeVoronoiMap(Grille& image,vector< Z2i::Point >& contour,char *outputfile,char* outputfileCells){
 	
 	Z2i::DigitalSet set(image.domain());
 
@@ -447,7 +451,7 @@ void computeVoronoiMap(Image& image,vector< Z2i::Point >& contour,char *outputfi
 	board.saveSVG(outputfileCells);
 } 
 
-void computeVoronoiMap(Image& image,vector< vector< Z2i::Point > >& contours,char *outputfile,char* outputfileCells){
+void computeVoronoiMap(Grille& image,vector< vector< Z2i::Point > >& contours,char *outputfile,char* outputfileCells){
 	
 	Z2i::DigitalSet set(image.domain());
 
@@ -485,10 +489,10 @@ void computeVoronoiMap(Image& image,vector< vector< Z2i::Point > >& contours,cha
 	board.saveSVG(outputfileCells);
 } 
 
-void computeDTAverage(Image & image1,Image & image2,int maxX,int maxY,char* outputfile){
+void computeDTAverage(Grille & image1,Grille & image2,int maxX,int maxY,char* outputfile){
 	Z2i::Point lower(0,0);
 	Z2i::Point upper(maxX,maxY);
-	Image DTAv(Z2i::Domain(lower,upper));
+	Grille DTAv(Z2i::Domain(lower,upper));
 	Board2D boardAv;
 	for (int i = 0;i<=maxX; i++){
 		for (int j = 0;j<=maxY; j++){
@@ -498,17 +502,17 @@ void computeDTAverage(Image & image1,Image & image2,int maxX,int maxY,char* outp
 	} 
 
 	unsigned int maxAv=0;
-  	for ( Image::iterator it = DTAv.begin(), itend = DTAv.end();it != itend; ++it)
+  	for ( Grille::iterator it = DTAv.begin(), itend = DTAv.end();it != itend; ++it)
     		if ( (*it) > maxAv)  maxAv = (*it);
 
 	Display2DFactory::drawImage<HueTwice>(boardAv, DTAv, (unsigned int)0, maxAv +1);
 	boardAv.saveSVG(outputfile);
 }
 
-void computeDTDiff(Image & image1,Image & image2,int maxX,int maxY,char* outputfile){
+void computeDTDiff(Grille & image1,Grille & image2,int maxX,int maxY,char* outputfile){
 	Z2i::Point lower(0,0);
 	Z2i::Point upper(maxX,maxY);
-	Image DTDiff(Z2i::Domain(lower,upper));
+	Grille DTDiff(Z2i::Domain(lower,upper));
 	Board2D boardDiff;
 	for (unsigned int i = 0;i<=maxX; i++){
 		for (unsigned int j = 0;j<=maxY; j++){
@@ -519,39 +523,54 @@ void computeDTDiff(Image & image1,Image & image2,int maxX,int maxY,char* outputf
 	} 
 
 	unsigned int maxDiff=0;
-  	for ( Image::iterator it = DTDiff.begin(), itend = DTDiff.end();it != itend; ++it)
+  	for ( Grille::iterator it = DTDiff.begin(), itend = DTDiff.end();it != itend; ++it)
     		if ( (*it) > maxDiff)  maxDiff = (*it);
 
 	Display2DFactory::drawImage<Gray>(boardDiff, DTDiff, (unsigned int)0, maxDiff +1);
 	boardDiff.saveSVG(outputfile);
 }
 
-void computeReverseDT(vector<int> & x ,vector<int> & y ,vector<int> & noise ,Z2i::Point pt,char* outputfile){
-	Image image(Z2i::Domain(Z2i::Point(0,0), pt ) ); 
-	PointPredicate predicate(image,0);
-	/*Problème dans l'affectation de la DT
-	DTL2 dt(image.domain(), predicate, Z2i::l2Metric);
-	int cpt=0;
-	DTL2::Value val;
-  	for ( DTL2::ConstRange::ConstIterator it = dt.constRange().begin(), itend = dt.constRange().end();it != itend; ++it){
-		
-		for (int i = 0;i<x.size();i++){
-			if (cpt%pt[0] == x[i] && cpt/pt[1] == pt[1]-y[i]) {it = noise[i];break;} 
-		}
-		cpt++;
-	}
+void computeReverseDT(Grille& image,char* outputfile){
 	
 	Z2i::L2PowerMetric l2power;
-	RDT reverseDT(image.domain(),&dt,&l2power);
+	RDT reverseDT(&image.domain(),&image,&l2power);
 	RDT::Value maxv=0;
 	for ( RDT::ConstRange::ConstIterator it = reverseDT.constRange().begin(), itend = reverseDT.constRange().end();it != itend; ++it)
     		if ((*it) > maxv)  maxv = (*it);
 
 	Board2D board;
 	board.clear();
-	Display2DFactory::drawImage<HueTwice>(board, reverseDT , (unsigned int)0, maxv +1);
-	board.saveSVG(outputfile);*/
+	Display2DFactory::drawImage<Gray>(board, reverseDT , (unsigned int)0, maxv +1);
+	board.saveSVG(outputfile);
 } 
+
+void computeMA(Grille &image,char *outputfile){
+	 
+	Z2i::Domain domain(image.domain().lowerBound(),image.domain().upperBound());
+	Z2i::Domain domainL(image.domain().lowerBound(),image.domain().upperBound());
+	Z2i::DigitalSet set(domain); 
+	for (int i = 0; i <= image.domain().upperBound()[0];i++){
+		for (int j = 0; j <= image.domain().upperBound()[1];j++){
+			if (image(Z2i::Point(i,j)) != 0 ) set.insertNew(Z2i::Point(i,j));  
+		} 
+	} 
+	DigitalSetDomain<Z2i::DigitalSet> setDomain(set);
+	MapImage mapImage(setDomain);
+	for (int i = 0; i <= mapImage.domain().upperBound()[0];i++){
+		for (int j = 0; j <= mapImage.domain().upperBound()[1];j++){
+			mapImage.setValue(Z2i::Point(i,j),image(Z2i::Point(i,j)));  
+		} 
+	}   
+	Z2i::L2PowerMetric l2power;
+	PowerMap<MapImage, Z2i::L2PowerMetric> power(&domainL, &mapImage, &l2power);
+
+	ReducedMedialAxis<PowerMap<MapImage, Z2i::L2PowerMetric> >::Type  rdma = ReducedMedialAxis< PowerMap<MapImage, Z2i::L2PowerMetric> >::getReducedMedialAxisFromPowerMap(power);
+	
+	Board2D board;
+	board.clear();
+	Display2DFactory::drawImage<Gray>(board, rdma , (unsigned int)0, (unsigned int)1);
+	board.saveSVG(outputfile);
+}
 
 int main(int argc,char **argv){
 	if (argc != 2){
@@ -569,7 +588,7 @@ int main(int argc,char **argv){
 	//noiseLevel.pop_back();
 	//freeman.pop_back();
 	
-
+	
 	//boite englobante
 	int valMaxX = x[0];
 	int valMaxY = y[0];
@@ -581,16 +600,18 @@ int main(int argc,char **argv){
 			valMaxY = y[i];
 		} 
 	}
-
+	
 	//création du domaine 
 	Z2i::Point lower(0,0);
 	Z2i::Point upper(valMaxX+20,valMaxY+20);
 	
 	//Création de l'image
 	
-  	Image image ( Z2i::Domain(lower,upper));
+  	Grille image ( Z2i::Domain(lower,upper));
+	Grille imageN ( Z2i::Domain(lower,upper));
+	Grille g( Z2i::Domain(lower,upper));
 
-	for ( Image::Iterator it = image.begin(), itend = image.end();it != itend; ++it)
+	for ( Grille::Iterator it = image.begin(), itend = image.end();it != itend; ++it)
     		(*it)=128;
 
 	for (int i=0;i<x.size();i++){
@@ -601,21 +622,35 @@ int main(int argc,char **argv){
 			}
 		}
 	}
+
+	for ( Grille::Iterator it = g.begin(), itend = g.end();it != itend; ++it)
+    		(*it)=0;
+
+	for (int i=0;i<x.size();i++){
+		g.setValue( Z2i::Point(x[i],valMaxY-y[i]+20),noiseLevel[i]);
+	}
 	// affichage de l'image dans un svg	
 	
-
-	Board2D board;
+	
+	Board2D board,boardN;
 	Display2DFactory::drawImage<Gray>(board, image, (unsigned int)0, (unsigned int)129);
 	board.saveSVG("../../../monResultat.svg");
+	for (int i = 0; i < image.domain().upperBound()[0];i++){
+		 for (int j = 0; j < image.domain().upperBound()[1];j++){
+			imageN.setValue(Z2i::Point(i,j),128-image(Z2i::Point(i,j)) ); 
+		}
+	}
+	Display2DFactory::drawImage<Gray>(boardN, imageN, (unsigned int)0, (unsigned int)129);
+	boardN.saveSVG("../../../monResultatNegatif.svg");
 	
 	//récupération des contours intérieurs et extérieurs
 	
 	vector< vector< Z2i::Point >  >  contours;
 	
 	getContours(contours,image,x,y,noiseLevel);
-	Image image1 ( Z2i::Domain(lower,upper));
-	Image image2 ( Z2i::Domain(lower,upper));
-	Image imageCB ( Z2i::Domain(lower,upper));
+	Grille image1 ( Z2i::Domain(lower,upper));
+	Grille image2 ( Z2i::Domain(lower,upper));
+	Grille imageCB ( Z2i::Domain(lower,upper));
 	
 	constructImage(contours[0],image1);
 	constructImage(contours[1],image2);
@@ -645,14 +680,18 @@ int main(int argc,char **argv){
 	computeVoronoiMap(imageCB,contours,"../../../VM_contourBoth.svg","../../../VMCells_contourBoth.svg"); 
 
 	//Calcul de la moyenne et la différence des 2DT
-	Image DT1 = imageDT(image1,valMaxX+20,valMaxY+20);
-	Image DT2 = imageDT(image2,valMaxX+20,valMaxY+20);
-	Image DTB = imageDT(imageCB,valMaxX+20,valMaxY+20);
+	Grille DT1 = imageDT(image1,valMaxX+20,valMaxY+20);
+	Grille DT2 = imageDT(image2,valMaxX+20,valMaxY+20);
+	Grille DTB = imageDT(imageCB,valMaxX+20,valMaxY+20);
+	Grille DTN = imageDT(imageN,valMaxX+20,valMaxY+20);
 	computeDTAverage(DT1,DT2,valMaxX+20,valMaxY+20,"../../../DT_contourAv.svg");
 	computeDTDiff(DT1,DT2,valMaxX+20,valMaxY+20,"../../../DT_contourDiff.svg");
 
 	// Calcul de la DT inverse
-	computeReverseDT(x,y,noiseLevel,upper,"../../../RDT_contour1.svg"); 
+	computeReverseDT(g,"../../../RDT_contour1.svg"); 
+
+	// Calcul de l'axe médian
+	computeMA(DTN,"../../../MA_contour1.svg");
 
 	//Création d'un contour avec boules réduites
 	//contourBallReduced(x,y,noiseLevel,freeman,valMaxX+20,valMaxY+20); 
