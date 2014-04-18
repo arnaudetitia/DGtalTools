@@ -5,7 +5,6 @@
 #include <cstdlib>
 #include <string>
 #include <math.h>
-#include <limits>
 
 #include "DGtal/base/Common.h"
 #include "DGtal/helpers/StdDefs.h"
@@ -65,9 +64,7 @@ typedef DistanceTransformation<Z2i::Space, PointPredicate, Z2i::L2Metric> VML2;
 typedef HueShadeColorMap<long int, 2> HueTwice;
 typedef NotPointPredicate<Z2i::DigitalSet> NotPredicate;
 typedef ExactPredicateLpSeparableMetric<Z2i::Space, 2> L2Metric;
-//typedef ExactPredicateLpSeparableMetric<Space,std::numeric_limits<int>::max()> LInfMetric;
-//typedef ExactPredicateLpPowerSeparableMetric<Z2i::Space, 2> L2PMetric;
-//typedef ExactPredicateLpPowerSeparableMetric<Space,std::numeric_limits<int>::max();> LInfPMetric;
+typedef ExactPredicateLpPowerSeparableMetric<Z2i::Space,2 > LIPowerMetric;
 typedef VoronoiMap<Z2i::Space, NotPredicate, L2Metric > Voronoi2D;
 typedef MetricAdjacency<Z2, 1> Adj4;
 typedef MetricAdjacency<Z2, 2> Adj8;
@@ -76,7 +73,8 @@ typedef DigitalTopology< Adj4, Adj8 > DT4_8;
 typedef Object<DT4_8, DigitalSet> ObjectType;
 typedef Object<DT4_8, DigitalSet> ObjectType48;
 typedef typename DigitalSet::ConstIterator DigitalSetConstIterator;
-typedef ReverseDistanceTransformation< Grille , Z2i::L2PowerMetric > RDT;
+typedef ReverseDistanceTransformation< Grille , LIPowerMetric > RDT;
+
 
 void readData(char *filename,vector<int>&x ,vector<int>&y ,vector<int>&noiseLevel,vector<int>&freeman){
 	ifstream data(filename);
@@ -123,6 +121,7 @@ void getContours(vector< vector< Z2i::Point >  >&  contours,Grille &image,vector
 			if (image(p) == 0) image_set.insertNew(p); 
     		}
 	}
+	
 	Adj4 adj4;
 	Adj8 adj8;
 	DT4_8 dt4_8 ( adj4, adj8, JORDAN_DT );
@@ -140,12 +139,14 @@ void getContours(vector< vector< Z2i::Point >  >&  contours,Grille &image,vector
 	for ( DigitalSetConstIterator it = it_begin;it != it_end;++it ) {
 		tmp.setValue((*it),0);	
 	}
+	
 	Z2i::Point depart = (*it_begin);
 	Z2i::Point currentPT = depart;
 	int flag;
 	int nbVoisin;
 	int direction = 0;
 	// extraction du contour exterieur
+	
 	do{
 		for (int i=0;i<4;i++){ 
 			if (tmp(currentPT+regard((direction+i)%4)) == 0) {
@@ -164,12 +165,26 @@ void getContours(vector< vector< Z2i::Point >  >&  contours,Grille &image,vector
 			if (tmp(Z2i::Point(i,j)) == 0){
 				flag = 0;
 				for (int k=0;k<cont1.size();k++){
-					if (cont1[k][0] == i && cont1[k][1] == j)
-						flag = 1; 
+					if (cont1[k][0] == i && cont1[k][1] == j){
+						flag = 1;
+						break; 
+					}
 				}
 				if (!flag) mand.push_back(Z2i::Point(i,j)); 
 			} 
 		} 
+	}
+	// extraction des points sont sur le contour exterieur mais qui ne sont pas sur le contour original
+	vector<Z2i::Point> forbid;
+	for (int i = 0;i<cont1.size();i++){
+		flag = 0;
+		for (int j = 0;j<x.size();j++){
+			if (cont1[i][0] == x[j] && cont1[i][1] == maxY-y[j]){
+				flag = 1;
+				break;
+			} 
+		}
+		if (!flag) forbid.push_back(Z2i::Point(cont1[i]));
 	}
 	// recherche d'un point de départ pour le contour interieur
 	int a=0;
@@ -202,11 +217,12 @@ void getContours(vector< vector< Z2i::Point >  >&  contours,Grille &image,vector
 	currentPT = depart;
 	direction = 0;
 	vector<Z2i::Point> pts;
-	vector<int> dir; 
+	vector<int> dir;
+	 
 	do{
 		pts.clear();
 		dir.clear();
-		for (int i=0;i<3;i++){ 
+		for (int i=0;i<4;i++){ 
 			if (tmp(currentPT+regard((direction+i)%4)) == 0) {
 				pts.push_back(currentPT+regard((direction+i)%4));
 				dir.push_back((direction+i)%4); 
@@ -227,11 +243,23 @@ void getContours(vector< vector< Z2i::Point >  >&  contours,Grille &image,vector
 			if (flag) break;  
 		}
 		if (!flag){
-			cont2.push_back(pts[0]);
-			currentPT = pts[0];
-			direction = (dir[0]+3)%4;	
-		}
-	}while (currentPT != depart);
+			for (int i =0;i< pts.size();i++){
+				flag = 0;
+				for (int j =0;j< forbid.size();j++){
+					if (pts[i] == forbid[j]){
+						flag = 1;
+						break;
+					} 	
+				}
+				if (!flag) {
+					cont2.push_back(pts[i]);
+					currentPT = pts[i];
+					direction = (dir[i]+3)%4;
+					break;
+				}
+			}	
+		}	
+	}while (currentPT != depart && cont2.size() < image.domain().upperBound()[0] * image.domain().upperBound()[1] ); 
 	cont2.push_back(currentPT); 
 	contours.push_back(cont1);
 	contours.push_back(cont2);
@@ -616,8 +644,8 @@ void computeDTDiff(Grille & image1,Grille & image2,int maxX,int maxY,char* outpu
 
 void computeReverseDT(Grille& image,char* outputfile){
 	
-	Z2i::L2PowerMetric l2power;
-	RDT reverseDT(&image.domain(),&image,&l2power);
+	LIPowerMetric lpower;
+	RDT reverseDT(&image.domain(),&image,&lpower);
 	RDT::Value maxv=0;
 	for ( RDT::ConstRange::ConstIterator it = reverseDT.constRange().begin(), itend = reverseDT.constRange().end();it != itend; ++it)
     		if ((*it) > maxv)  maxv = (*it);
@@ -684,28 +712,36 @@ int main(int argc,char **argv){
 			valMaxY = y[i];
 		} 
 	}
+	int ecartX = 10;
+	int ecartY = 10;
 	
 	//création du domaine 
 	Z2i::Point lower(0,0);
-	Z2i::Point upper(valMaxX+20,valMaxY+20);
+	Z2i::Point upper(valMaxX+ecartX,valMaxY+ecartY);
 	
 	//Création de l'image
 	
   	Grille image ( Z2i::Domain(lower,upper));
+	Grille f ( Z2i::Domain(lower,upper));
 	Grille imageN ( Z2i::Domain(lower,upper));
 
 	for ( Grille::Iterator it = image.begin(), itend = image.end();it != itend; ++it)
     		(*it)=128;
 
 	for (int i=0;i<x.size();i++){
-		for (int a = max(0,x[i]-(noiseLevel[i]-1) ) ; a <= min(x[i]+(noiseLevel[i]-1),valMaxX+20); a++ ){
-			for (int b = max(0,y[i]-(noiseLevel[i]-1) ) ; b <= min(y[i]+(noiseLevel[i]-1),valMaxY+20); b++ ){
-				image.setValue( Z2i::Point(a,valMaxY-b+20),0);
+		for (int a = max(0,x[i]-(noiseLevel[i]-1) ) ; a <= min(x[i]+(noiseLevel[i]-1),valMaxX+ecartX); a++ ){
+			for (int b = max(0,y[i]-(noiseLevel[i]-1) ) ; b <= min(y[i]+(noiseLevel[i]-1),valMaxY+ecartY); b++ ){
+				image.setValue( Z2i::Point(a,valMaxY-b+ecartY),0);
 				//image.setValue( Z2i::Point(x[i],valMaxY-y[i]+20),0);
 			}
 		}
 	}
 
+	for ( Grille::Iterator it = f.begin(), itend = f.end();it != itend; ++it)
+    		(*it)=0;
+
+	f.setValue( Z2i::Point((valMaxX+ecartX)/2,(valMaxY+ecartY)/2),49);
+	
 	
 	Z2i::Domain domain(Z2i::Point(0,0),image.domain().upperBound());
 	Z2i::DigitalSet set(domain);
@@ -745,7 +781,7 @@ int main(int argc,char **argv){
 	
 	constructImage(contours[0],image1);
 	constructImage(contours[1],image2);
-
+	
 	constructImageBothContour(contours[0],contours[1],imageCB);
 
 	Board2D boardCB;
@@ -771,18 +807,18 @@ int main(int argc,char **argv){
 	computeVoronoiMap(imageCB,contours,"../../../VM_contourBoth.svg","../../../VMCells_contourBoth.svg"); 
 
 	//Calcul de la moyenne et la différence des 2DT
-	Grille DT1 = imageDT(image1,valMaxX+20,valMaxY+20);
-	Grille DT2 = imageDT(image2,valMaxX+20,valMaxY+20);
-	Grille DTB = imageDT(imageCB,valMaxX+20,valMaxY+20);
-	Grille DTN = imageDT(imageN,valMaxX+20,valMaxY+20);
-	computeDTAverage(DT1,DT2,valMaxX+20,valMaxY+20,"../../../DT_contourAv.svg");
-	computeDTDiff(DT1,DT2,valMaxX+20,valMaxY+20,"../../../DT_contourDiff.svg");
+	Grille DT1 = imageDT(image1,valMaxX+ecartX,valMaxY+ecartY);
+	Grille DT2 = imageDT(image2,valMaxX+ecartX,valMaxY+ecartY);
+	Grille DTB = imageDT(imageCB,valMaxX+ecartX,valMaxY+ecartY);
+	Grille DTN = imageDT(imageN,valMaxX+ecartX,valMaxY+ecartY);
+	computeDTAverage(DT1,DT2,valMaxX+ecartX,valMaxY+ecartY,"../../../DT_contourAv.svg");
+	computeDTDiff(DT1,DT2,valMaxX+ecartX,valMaxY+ecartY,"../../../DT_contourDiff.svg");
 
 	// Calcul de la DT inverse
-	computeReverseDT(DT1,"../../../RDT_contour1.svg"); 
+	computeReverseDT(f,"../../../RDT_contour1.svg"); 
 
 	// Calcul de l'axe médian
-	computeMA(DT1,"../../../MA_contour1.svg");
+	computeMA(image1,"../../../MA_contour1.svg");
 
 	//Création d'un contour avec boules réduites
 	//contourBallReduced(x,y,noiseLevel,freeman,valMaxX+20,valMaxY+20); 
