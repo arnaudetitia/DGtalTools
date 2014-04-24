@@ -507,7 +507,7 @@ void computeDT(Grille& image,char *outputfile){
 
 	Board2D board;
 	board.clear();
-  	Display2DFactory::drawImage<HueTwice>(board, dt, 0.0, maxv + 1); 
+  	Display2DFactory::drawImage<HueTwice>(board, dt, 0, maxv + 1); 
 
 	board.saveSVG ( outputfile );
 }
@@ -645,107 +645,75 @@ void computeDTDiff(Grille & image1,Grille & image2,int maxX,int maxY,char* outpu
 
 void computeReverseDT(Grille& image,char* outputfile){
 	
-	LIPowerMetric lpower;
-	RDT reverseDT(&image.domain(),&image,&lpower);
+	Z2i::L2PowerMetric l2power;
+	RDT reverseDT(&image.domain(),&image,&l2power);
 	RDT::Value maxv=0;
 	RDT::Value minv= 500000;
 	for ( RDT::ConstRange::ConstIterator it = reverseDT.constRange().begin(), itend = reverseDT.constRange().end();it != itend; ++it)
     		{if ((*it) < minv)  minv = (*it);if ((*it) > maxv)  maxv = (*it);}
-
+ 	cout << minv << "   " << maxv << endl;
 	Board2D board;
 	board.clear();
-	Display2DFactory::drawImage<Gray>(board, reverseDT , minv-1, maxv +1);
+	Display2DFactory::drawImage<Gray>(board, reverseDT , minv, maxv);
 	board.saveSVG(outputfile);
 } 
 
 void computeMA(Grille &image,char *outputfile){
+	Z2i::Domain domain(Z2i::Point(0,0),image.domain().upperBound());
+  	Z2i::Domain domainLarge(Z2i::Point(0,0),image.domain().upperBound());
+	
+	Grille im(domain);
+	for (int i = 0;i<=image.domain().upperBound()[0];i++){
+		for (int j = 0;j<=image.domain().upperBound()[1];j++){
+			Z2i::Point p(i,j); 
+			im.setValue(p,image(p) * image(p));  
+		} 
+	}
 	 
-	Z2i::Domain domain(image.domain().lowerBound(),image.domain().upperBound());
-	Z2i::Domain domainL(image.domain().lowerBound(),image.domain().upperBound());
-	Z2i::DigitalSet set(domain); 
-	for (int i = 0; i <= image.domain().upperBound()[0];i++){
-		for (int j = 0; j <= image.domain().upperBound()[1];j++){
-			if (image(Z2i::Point(i,j)) == 0 ) set.insertNew(Z2i::Point(i,j));  
-		} 
-	} 
-	DigitalSetDomain<Z2i::DigitalSet> setDomain(set);
-	MapImage mapImage(setDomain);
-	for (int i = 0; i <= mapImage.domain().upperBound()[0];i++){
-		for (int j = 0; j <= mapImage.domain().upperBound()[1];j++){
-			mapImage.setValue(Z2i::Point(i,j),image(Z2i::Point(i,j)));  
-		} 
-	}   
+	
 	Z2i::L2PowerMetric l2power;
-	PowerMap<MapImage, Z2i::L2PowerMetric> power(&domainL, &mapImage, &l2power);
-
-	Board2D board;
-	board.clear();
-
-	for(PowerMap<MapImage, Z2i::L2PowerMetric>::Domain::ConstIterator it = power.domain().begin(),
-      	itend = power.domain().end(); it != itend; ++it)
-  	{
-    		PowerMap<MapImage, Z2i::L2PowerMetric>::Value site = power( *it );   //closest site to (*it)
-    		if (site != (*it))
-      			Display2DFactory::draw( board,   site - (*it), (*it)); //Draw an arrow
-  	} 
-
-	board.saveSVG("../../../PowerMap.svg");
-
-	board.clear();
-  	for(PowerMap<MapImage, Z2i::L2PowerMetric>::Domain::ConstIterator it = power.domain().begin(),
-      	itend = power.domain().end(); it != itend; ++it)
-  	{
-   		PowerMap<MapImage, Z2i::L2PowerMetric>::Value site = power( *it );   //closest site to (*it)
-   		 unsigned char c = (site[1]*13 + site[0] * 7) % 256; //basic hashfunction
-    		board << CustomStyle( (*it).className(), new CustomColors(Color(c,c,c),Color(c,c,c)))<< (*it);
-  	}
+  	PowerMap<Grille, Z2i::L2PowerMetric> power(&domainLarge, &im, &l2power);
 	
-	board.saveSVG("../../../PowerMapCells.svg");
-	 
-	ReducedMedialAxis<PowerMap<MapImage, Z2i::L2PowerMetric> >::Type  rdma = ReducedMedialAxis< PowerMap<MapImage, Z2i::L2PowerMetric> >::getReducedMedialAxisFromPowerMap(power);
-	
-	int maxv = 0;
-	for(unsigned int i=0; i<=image.domain().upperBound()[0]; i++){
-      		for(unsigned int j=0; j<=image.domain().upperBound()[1]; j++){
-	  		Z2i::Point p(i,j);
-			if (rdma(p) > maxv ) maxv = rdma(p); 
-		}
+	ReducedMedialAxis<PowerMap<Grille, Z2i::L2PowerMetric> >::Type  rdma = ReducedMedialAxis< PowerMap<Grille, Z2i::L2PowerMetric> >::getReducedMedialAxisFromPowerMap(power);
+
+	int maxv=0;
+	for (int i = 0;i<=im.domain().upperBound()[0];i++){
+		for (int j = 0;j<=im.domain().upperBound()[1];j++){
+			if (rdma(Z2i::Point(i,j)) > maxv) maxv = rdma(Z2i::Point(i,j)); 
+		} 
 	}
 	
+	Board2D board;
 	board.clear();
-	Display2DFactory::drawImage<Gray>(board, rdma , (unsigned int) 0 , maxv +1);
+	Display2DFactory::drawImage<Gray>(board, rdma , (unsigned int)0, maxv +1);
 	board.saveSVG(outputfile);
 }
 
 Grille imageAM(Grille& image){
-	Z2i::Domain domain(image.domain().lowerBound(),image.domain().upperBound());
-	Z2i::Domain domainL(image.domain().lowerBound(),image.domain().upperBound());
-	Z2i::DigitalSet set(domain); 
-	for (int i = 0; i <= image.domain().upperBound()[0];i++){
-		for (int j = 0; j <= image.domain().upperBound()[1];j++){
-			if (image(Z2i::Point(i,j)) != 0 ) set.insertNew(Z2i::Point(i,j));  
+	Z2i::Domain domain(Z2i::Point(0,0),image.domain().upperBound());
+  	Z2i::Domain domainLarge(Z2i::Point(0,0),image.domain().upperBound());
+	
+	Grille im(domain);
+	for (int i = 0;i<=image.domain().upperBound()[0];i++){
+		for (int j = 0;j<=image.domain().upperBound()[1];j++){
+			Z2i::Point p(i,j); 
+			im.setValue(p,image(p) * image(p));  
 		} 
-	} 
-	DigitalSetDomain<Z2i::DigitalSet> setDomain(set);
-	MapImage mapImage(setDomain);
-	for (int i = 0; i <= mapImage.domain().upperBound()[0];i++){
-		for (int j = 0; j <= mapImage.domain().upperBound()[1];j++){
-			mapImage.setValue(Z2i::Point(i,j),image(Z2i::Point(i,j)));  
-		} 
-	}   
+	}
+	 
+	
 	Z2i::L2PowerMetric l2power;
-	PowerMap<MapImage, Z2i::L2PowerMetric> power(&domainL, &mapImage, &l2power);
-
-	ReducedMedialAxis<PowerMap<MapImage, Z2i::L2PowerMetric> >::Type  rdma = ReducedMedialAxis< PowerMap<MapImage, Z2i::L2PowerMetric> >::getReducedMedialAxisFromPowerMap(power);
+  	PowerMap<Grille, Z2i::L2PowerMetric> power(&domainLarge, &im, &l2power);
+	
+	ReducedMedialAxis<PowerMap<Grille, Z2i::L2PowerMetric> >::Type  rdma = ReducedMedialAxis< PowerMap<Grille, Z2i::L2PowerMetric> >::getReducedMedialAxisFromPowerMap(power);
 	
 	Grille result(Z2i::Domain(image.domain().lowerBound(),image.domain().upperBound()));
-	for(unsigned int i=0; i<image.domain().upperBound()[0]; i++){
-      		for(unsigned int j=0; j<image.domain().upperBound()[1]; j++){
-	  		Z2i::Point p(i,j);
-			result.setValue(p,rdma(p));
-		}
+	for (int i = 0;i<=result.domain().upperBound()[0];i++){
+		for (int j = 0;j<=result.domain().upperBound()[1];j++){
+			Z2i::Point p(i,j);
+			result.setValue(p,rdma(p));  
+		} 
 	}
-	
 	return result;
 } 
 
@@ -843,17 +811,28 @@ int main(int argc,char **argv){
 	//Création de l'image
 	
   	Grille image ( Z2i::Domain(lower,upper));
+	Grille test ( Z2i::Domain(lower,Z2i::Point(26,26)));
 	Grille f ( Z2i::Domain(lower,upper));
 	Grille imageN ( Z2i::Domain(lower,upper));
 
 	for ( Grille::Iterator it = image.begin(), itend = image.end();it != itend; ++it)
     		(*it)=128;
 
+	for ( Grille::Iterator it = test.begin(), itend = test.end();it != itend; ++it)
+    		(*it)=0;
+
+	for (int i = 3; i <= 23 ; i++){
+		for (int j = 3; j <= 23 ; j++){
+			Z2i::Point p(i,j);
+			test.setValue(p,128); 
+		}
+	}
+	
+
 	for (int i=0;i<x.size();i++){
 		for (int a = max(0,x[i]-(noiseLevel[i]-1) ) ; a <= min(x[i]+(noiseLevel[i]-1),valMaxX+ecartX); a++ ){
 			for (int b = max(0,y[i]-(noiseLevel[i]-1) ) ; b <= min(y[i]+(noiseLevel[i]-1),valMaxY+ecartY); b++ ){
 				image.setValue( Z2i::Point(a,valMaxY-b+ecartY),0);
-				//image.setValue( Z2i::Point(x[i],valMaxY-y[i]+20),0);
 			}
 		}
 	}
@@ -882,7 +861,7 @@ int main(int argc,char **argv){
 	// affichage de l'image dans un svg	
 	
 	
-	Board2D board,boardN,boardG;
+	Board2D board,boardN,boardG,bTest;
 	Display2DFactory::drawImage<Gray>(board, image, (unsigned int)0, (unsigned int)129);
 	board.saveSVG("../../../monResultat.svg");
 	for (int i = 0; i < image.domain().upperBound()[0];i++){
@@ -891,7 +870,9 @@ int main(int argc,char **argv){
 		}
 	}
 	Display2DFactory::drawImage<Gray>(boardN, imageN, (unsigned int)0, (unsigned int)129);
+	Display2DFactory::drawImage<Gray>(bTest, test, (unsigned int)0, (unsigned int)129);
 	boardN.saveSVG("../../../monResultatNegatif.svg");
+	bTest.saveSVG("../../../TestOriginal.svg");
 	homotopicThinning(imageN,"../../../skeleton.svg");
 	//récupération des contours intérieurs et extérieurs
 	
@@ -921,7 +902,8 @@ int main(int argc,char **argv){
 	
 	computeDT(image1,"../../../DT_contour1.svg"); 
 	computeDT(image2,"../../../DT_contour2.svg"); 
-	computeDT(imageCB,"../../../DT_contourBoth.svg"); 
+	computeDT(imageCB,"../../../DT_contourBoth.svg");
+	computeDT(test,"../../../DT_test.svg");
 
 	// Calcul de la Voronoi Map 
 
@@ -934,19 +916,25 @@ int main(int argc,char **argv){
 	Grille DT2 = imageDT(image2,valMaxX+ecartX,valMaxY+ecartY);
 	Grille DTB = imageDT(imageCB,valMaxX+ecartX,valMaxY+ecartY);
 	Grille DTN = imageDT(imageN,valMaxX+ecartX,valMaxY+ecartY);
+	Grille DTTest = imageDT(test,26,26);
 	computeDTAverage(DT1,DT2,valMaxX+ecartX,valMaxY+ecartY,"../../../DT_contourAv.svg");
 	computeDTDiff(DT1,DT2,valMaxX+ecartX,valMaxY+ecartY,"../../../DT_contourDiff.svg");
 
 	// Calcul de la DT inverse
+	cout << "reverse DT de F" << endl;
 	computeReverseDT(f,"../../../RDT_contour1.svg"); 
 
 	// Calcul de l'axe médian
 	computeMA(DT1,"../../../MA_contour1.svg");
-	computeMA(DT2,"../../../MA_contour2.svg");
+	computeMA(DTTest,"../../../MA_test.svg");
+	//computeMA(DT2,"../../../MA_contour2.svg");
 	Grille MA1 = imageAM(DT1);
-	Grille MA2 = imageAM(DT2);
-	computeReverseDT(MA1,"../../../RDT_MA1.svg"); 
-	computeReverseDT(MA2,"../../../RDT_MA2.svg"); 
+	Grille MTest = imageAM(DTTest);
+	//Grille MA2 = imageAM(DT2);
+	cout << "reverse DT de MA1" << endl;
+	computeReverseDT(MA1,"../../../RDT_MA1.svg");
+	computeReverseDT(MTest,"../../../RDT_MA_test.svg"); 
+	//computeReverseDT(MA2,"../../../RDT_MA2.svg"); 
 	
 
 	//Création d'un contour avec boules réduites
