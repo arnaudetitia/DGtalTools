@@ -646,16 +646,32 @@ void computeDTDiff(Grille & image1,Grille & image2,int maxX,int maxY,char* outpu
 void computeReverseDT(Grille& image,char* outputfile){
 	
 	Z2i::L2PowerMetric l2power;
+
 	RDT reverseDT(&image.domain(),&image,&l2power);
 	RDT::Value maxv=0;
 	RDT::Value minv= 500000;
 	for ( RDT::ConstRange::ConstIterator it = reverseDT.constRange().begin(), itend = reverseDT.constRange().end();it != itend; ++it)
     		{if ((*it) < minv)  minv = (*it);if ((*it) > maxv)  maxv = (*it);}
- 	cout << minv << "   " << maxv << endl;
+	
+	Grille result (image.domain());
+	//RDT::ConstRange::ConstIterator it = reverseDT.constRange().begin();
+	for (int i = 0;i<=image.domain().upperBound()[1];i++){
+		for (int j = 0;j<=image.domain().upperBound()[0];j++){
+			Z2i::Point p(j,i); 
+			if (image(p) != 0 ){
+				for (int a = 0;a<=image.domain().upperBound()[1];a++){
+					for (int b = 0;b<=image.domain().upperBound()[0];b++){
+						if (abs(j-b)*abs(j-b) + abs(i-a)*abs(i-a)< image(p) ) result.setValue( Z2i::Point(b,a),1); 
+					}
+				}
+			} 
+		} 
+	}	 
 	Board2D board;
 	board.clear();
-	Display2DFactory::drawImage<Gray>(board, reverseDT , minv, maxv);
+	Display2DFactory::drawImage<Gray>(board, result ,0, 1);
 	board.saveSVG(outputfile);
+	
 } 
 
 void computeMA(Grille &image,char *outputfile){
@@ -811,7 +827,7 @@ int main(int argc,char **argv){
 	//Création de l'image
 	
   	Grille image ( Z2i::Domain(lower,upper));
-	Grille test ( Z2i::Domain(lower,Z2i::Point(26,26)));
+	Grille test ( Z2i::Domain(lower,Z2i::Point(30,30)));
 	Grille f ( Z2i::Domain(lower,upper));
 	Grille imageN ( Z2i::Domain(lower,upper));
 
@@ -821,12 +837,7 @@ int main(int argc,char **argv){
 	for ( Grille::Iterator it = test.begin(), itend = test.end();it != itend; ++it)
     		(*it)=0;
 
-	for (int i = 3; i <= 23 ; i++){
-		for (int j = 3; j <= 23 ; j++){
-			Z2i::Point p(i,j);
-			test.setValue(p,128); 
-		}
-	}
+	test.setValue(Z2i::Point(15,15),25); 
 	
 
 	for (int i=0;i<x.size();i++){
@@ -870,7 +881,7 @@ int main(int argc,char **argv){
 		}
 	}
 	Display2DFactory::drawImage<Gray>(boardN, imageN, (unsigned int)0, (unsigned int)129);
-	Display2DFactory::drawImage<Gray>(bTest, test, (unsigned int)0, (unsigned int)129);
+	Display2DFactory::drawImage<Gray>(bTest, test, (unsigned int)0, (unsigned int)25);
 	boardN.saveSVG("../../../monResultatNegatif.svg");
 	bTest.saveSVG("../../../TestOriginal.svg");
 	homotopicThinning(imageN,"../../../skeleton.svg");
@@ -916,7 +927,7 @@ int main(int argc,char **argv){
 	Grille DT2 = imageDT(image2,valMaxX+ecartX,valMaxY+ecartY);
 	Grille DTB = imageDT(imageCB,valMaxX+ecartX,valMaxY+ecartY);
 	Grille DTN = imageDT(imageN,valMaxX+ecartX,valMaxY+ecartY);
-	Grille DTTest = imageDT(test,26,26);
+	Grille DTTest = imageDT(test,30,30);
 	computeDTAverage(DT1,DT2,valMaxX+ecartX,valMaxY+ecartY,"../../../DT_contourAv.svg");
 	computeDTDiff(DT1,DT2,valMaxX+ecartX,valMaxY+ecartY,"../../../DT_contourDiff.svg");
 
@@ -926,14 +937,12 @@ int main(int argc,char **argv){
 
 	// Calcul de l'axe médian
 	computeMA(DT1,"../../../MA_contour1.svg");
-	computeMA(DTTest,"../../../MA_test.svg");
 	//computeMA(DT2,"../../../MA_contour2.svg");
 	Grille MA1 = imageAM(DT1);
-	Grille MTest = imageAM(DTTest);
 	//Grille MA2 = imageAM(DT2);
 	cout << "reverse DT de MA1" << endl;
 	computeReverseDT(MA1,"../../../RDT_MA1.svg");
-	computeReverseDT(MTest,"../../../RDT_MA_test.svg"); 
+	computeReverseDT(test,"../../../RDT_MA_test.svg"); 
 	//computeReverseDT(MA2,"../../../RDT_MA2.svg"); 
 	
 
