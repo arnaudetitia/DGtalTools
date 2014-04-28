@@ -330,6 +330,18 @@ bool isInside(Grille &image,Z2i::Point p){
 	return ( (U%2==1) && (R%2==1) && (L%2==1) && (D%2==1) );	
 }
 
+Z2i::Point findGerme(Grille &image){
+	srand (time(NULL));
+	int limX = image.domain().upperBound()[0];
+	int limY = image.domain().upperBound()[1];
+	int x = rand()%limX,y=rand()%limY;
+	while (!(isInside(image,Z2i::Point(x,y))) || (image(Z2i::Point(x,y)) == 128 ) ) {
+		x = rand()%limX;
+		y = rand()%limY;
+	}
+	return Z2i::Point(x,y);
+} 
+
 void fill(Grille &image,Z2i::Point p){
 	int limX = image.domain().upperBound()[0];
 	int limY = image.domain().upperBound()[1];
@@ -340,6 +352,10 @@ void fill(Grille &image,Z2i::Point p){
 			fill(image,pt);
 		} 
 	} 
+}
+
+void fill(Grille &image){
+	fill(image,findGerme(image));
 }  
   
 
@@ -350,16 +366,7 @@ void constructImage(vector< Z2i::Point >& contour,Grille& image){
 	for (int i=0;i<contour.size();i++){
 		image.setValue(contour[i],128);
 	}
-	srand (time(NULL));
-	int limX = image.domain().upperBound()[0];
-	int limY = image.domain().upperBound()[1];
-	int x = rand()%limX,y=rand()%limY;
-	while (!(isInside(image,Z2i::Point(x,y))) || (image(Z2i::Point(x,y)) == 128 ) ) {
-		x = rand()%limX;
-		y = rand()%limY;
-	}
-	image.setValue(Z2i::Point(x,y),128);
-	fill(image,Z2i::Point(x,y)); 
+	fill(image);
 	
 	
 }
@@ -650,15 +657,15 @@ Grille imageRDT(Grille& image,char* outputfile){
 	Grille result (image.domain());
 	for (int i = 0;i<=image.domain().upperBound()[0];i++){
 		for (int j = 0;j<=image.domain().upperBound()[1];j++){
-			Z2i::Point p(i,j); 
+			Z2i::Point p(i,j);
 			if (image(p) != 0 ){
-				for (int a = 0;a<=image.domain().upperBound()[0];a++){
-					for (int b = 0;b<=image.domain().upperBound()[1];b++){
+				for (int a = i-sqrt(image(p));a<=i+sqrt(image(p));a++){
+					for (int b = j-sqrt(image(p));b<=j+sqrt(image(p));b++){
 						if (abs(j-b)*abs(j-b) + abs(i-a)*abs(i-a)< image(p) ) result.setValue( Z2i::Point(a,b),1); 
 					}
 				}
 			} 
-		} 
+		}
 	}	 
 	Board2D board;
 	board.clear();
@@ -804,11 +811,7 @@ int main(int argc,char **argv){
 	for ( Grille::Iterator it = test.begin(), itend = test.end();it != itend; ++it)
     		(*it)=0;
 	
-	for(int i = 3;i <= 27;i++){
-		for(int j = 3;j <= 27;j++){
-			test.setValue(Z2i::Point(i,j),128); 
-		}
-	}
+	test.setValue(Z2i::Point(15,15),25); 
 	
 
 	for (int i=0;i<x.size();i++){
@@ -897,18 +900,19 @@ int main(int argc,char **argv){
 	computeDTAverage(DT1,DT2,"../../../DT_contourAv.svg");
 	computeDTDiff(DT1,DT2,"../../../DT_contourDiff.svg");
 
-	// Calcul de la DT inverse
-	cout << "reverse DT de F" << endl;
-	Grille RDTf = imageRDT(f,"../../../RDT_contour1.svg"); 
-
 	// Calcul de l'axe médian
 	Grille MA1 = imageAM(DT1,"../../../MA_contour1.svg");
-	//Grille MA2 = imageAM(DT2);
-	Grille MATest = imageAM(DTTest,"../../../MA_test.svg"); 
-	cout << "reverse DT de MA1" << endl;
+	Grille MA2 = imageAM(DT2,"../../../MA_contour2.svg");
+
+	// Reconstitution de la forme
 	Grille RDT1 = imageRDT(MA1,"../../../RDT_MA1.svg");
-	Grille RDTTest = imageRDT(MATest,"../../../RDT_MA_test.svg"); 
-	//computeReverseDT(MA2,"../../../RDT_MA2.svg"); 
+	Grille RDT2 = imageRDT(MA2,"../../../RDT_MA2.svg"); 
+	
+	//Test Axe Médian du contour 
+
+	Grille DT_anneau = imageDT(imageN,"../../../DT_anneau.svg");
+	Grille MA_anneau = imageAM(DT_anneau,"../../../MA_anneau.svg");
+	 
 	
 
 	//Création d'un contour avec boules réduites
