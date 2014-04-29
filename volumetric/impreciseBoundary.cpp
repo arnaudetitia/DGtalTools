@@ -65,7 +65,7 @@ typedef DistanceTransformation<Z2i::Space, PointPredicate, Z2i::L2Metric> VML2;
 typedef HueShadeColorMap<long int, 2> HueTwice;
 typedef NotPointPredicate<Z2i::DigitalSet> NotPredicate;
 typedef ExactPredicateLpSeparableMetric<Z2i::Space, 2> L2Metric;
-typedef ExactPredicateLpPowerSeparableMetric<Z2i::Space,2 > LIPowerMetric;
+typedef ExactPredicateLpPowerSeparableMetric<Z2i::Space,2 > L2PowerMetric;
 typedef VoronoiMap<Z2i::Space, NotPredicate, L2Metric > Voronoi2D;
 typedef MetricAdjacency<Z2, 1> Adj4;
 typedef MetricAdjacency<Z2, 2> Adj8;
@@ -74,11 +74,12 @@ typedef DigitalTopology< Adj4, Adj8 > DT4_8;
 typedef Object<DT4_8, DigitalSet> ObjectType;
 typedef Object<DT4_8, DigitalSet> ObjectType48;
 typedef typename DigitalSet::ConstIterator DigitalSetConstIterator;
-typedef ReverseDistanceTransformation< Grille , LIPowerMetric > RDT;
+typedef ReverseDistanceTransformation< Grille , L2PowerMetric > RDT;
 
 
 void readData(char *filename,vector<int>&x ,vector<int>&y ,vector<int>&noiseLevel,vector<int>&freeman){
 	ifstream data(filename);
+	if (data == NULL) exit(1);
 	int entierPoubelle;
 	char buffer[150];
 	stringstream ss;
@@ -134,7 +135,6 @@ void getContours(vector< vector< Z2i::Point >  >&  contours,Grille &image,vector
     		(*it)=128;
 	DigitalSetConstIterator it_end = imageBorder.end();
 	DigitalSetConstIterator it_begin = imageBorder.begin(); 
-	int currentX,currentY;
 	vector<Z2i::Point> cont1;
 	vector<Z2i::Point> cont2;
 	for ( DigitalSetConstIterator it = it_begin;it != it_end;++it ) {
@@ -189,7 +189,6 @@ void getContours(vector< vector< Z2i::Point >  >&  contours,Grille &image,vector
 	}
 	// recherche d'un point de départ pour le contour interieur
 	int a=0;
-	int t;
 	flag = 0;
 	Z2i::Point h;
 	while (!flag){
@@ -490,21 +489,6 @@ void contourBallReduced(vector<int>& x,vector<int>& y,vector<int>& noiseLevel,ve
 	} */
 }
 
-void constructImageBothContour(vector< Z2i::Point >& contour1,vector< Z2i::Point >& contour2,Grille& image){
-	for ( Grille::Iterator it = image.begin(), itend = image.end();it != itend; ++it)
-    		(*it)=128;
-
-	for (int i=0;i<contour1.size();i++){
-		image.setValue(contour1[i],0);
-	}
-	for (int i=0;i<contour2.size();i++){
-		image.setValue(contour2[i],0);
-	}
-	
-	
-}
-
-
 Grille imageDT(Grille& image,char *outputfile){
 	PointPredicate predicate(image,0);
 	int maxX = image.domain().upperBound()[0];
@@ -529,49 +513,14 @@ Grille imageDT(Grille& image,char *outputfile){
 	return result;
 } 
 
-void computeVoronoiMap(Grille& image,vector< Z2i::Point >& contour,char *outputfile,char* outputfileCells){
+Voronoi2D voronoiMap(Grille& image,char *outputfile,char* outputfileCells){
 	
 	Z2i::DigitalSet set(image.domain());
 
-	for (int i=0;i<contour.size();i++){
-		set.insertNew(contour[i]);
-	} 
-
-	NotPredicate notSetPred(set);
-	
-	L2Metric l2;
-	Voronoi2D voronoimap(image.domain(),notSetPred,l2);
-	
-	Board2D board;
-	board.clear();
-	board << image.domain() << set;
-	for(Voronoi2D::Domain::ConstIterator it = voronoimap.domain().begin(),
-      	itend = voronoimap.domain().end(); it != itend; ++it)
-  	{
-    		Voronoi2D::Value site = voronoimap( *it );   //closest site to (*it)
-    		if (site != (*it))
-      			Display2DFactory::draw( board,   site - (*it), (*it)); //Draw an arrow
-  	}
-	board.saveSVG(outputfile);
-
-	board.clear();
-  	for(Voronoi2D::Domain::ConstIterator it = voronoimap.domain().begin(),
-      	itend = voronoimap.domain().end(); it != itend; ++it)
-  	{
-   		Voronoi2D::Value site = voronoimap( *it );   //closest site to (*it)
-   		 unsigned char c = (site[1]*13 + site[0] * 7) % 256; //basic hashfunction
-    		board << CustomStyle( (*it).className(), new CustomColors(Color(c,c,c),Color(c,c,c)))<< (*it);
-  	}
-	board.saveSVG(outputfileCells);
-} 
-
-void computeVoronoiMap(Grille& image,vector< vector< Z2i::Point > >& contours,char *outputfile,char* outputfileCells){
-	
-	Z2i::DigitalSet set(image.domain());
-
-	for (int i=0;i<contours.size();i++){
-		for (int j=0;j<contours[i].size();j++){
-			set.insertNew(contours[i][j]);
+	for (int i=0;i<=image.domain().upperBound()[0];i++){
+		for (int j=0;j<=image.domain().upperBound()[1];j++){
+			Z2i::Point p(i,j);
+			if (image(p) == 0) set.insertNew(p);
 		}
 	} 
 
@@ -601,7 +550,9 @@ void computeVoronoiMap(Grille& image,vector< vector< Z2i::Point > >& contours,ch
     		board << CustomStyle( (*it).className(), new CustomColors(Color(c,c,c),Color(c,c,c)))<< (*it);
   	}
 	board.saveSVG(outputfileCells);
+	return voronoimap;
 } 
+
 
 void computeDTAverage(Grille & image1,Grille & image2,char* outputfile){
 	Z2i::Point lower(0,0);
@@ -658,10 +609,12 @@ Grille imageRDT(Grille& image,char* outputfile){
 	for (int i = 0;i<=image.domain().upperBound()[0];i++){
 		for (int j = 0;j<=image.domain().upperBound()[1];j++){
 			Z2i::Point p(i,j);
+			if (reverseDT(p) < 0 ) result.setValue(p,2);
 			if (image(p) != 0 ){
 				for (int a = i-sqrt(image(p));a<=i+sqrt(image(p));a++){
 					for (int b = j-sqrt(image(p));b<=j+sqrt(image(p));b++){
-						if (abs(j-b)*abs(j-b) + abs(i-a)*abs(i-a)< image(p) ) result.setValue( Z2i::Point(a,b),1); 
+						Z2i::Point q(a,b);
+						if (abs(j-b)*abs(j-b) + abs(i-a)*abs(i-a)< image(p) && result(q) != 2) result.setValue( q,1); 
 					}
 				}
 			} 
@@ -669,7 +622,7 @@ Grille imageRDT(Grille& image,char* outputfile){
 	}	 
 	Board2D board;
 	board.clear();
-	Display2DFactory::drawImage<Gray>(board, result ,0, 1);
+	Display2DFactory::drawImage<Gray>(board, result ,0, 2);
 	board.saveSVG(outputfile);
 
 	return result;
@@ -730,7 +683,6 @@ void homotopicThinning(Grille &image,char *outputfile){
   	int layer = 1;
   	std::queue<DigitalSet::Iterator> Q;
 	do {
-      		int nb=0;
       		DigitalSet & S = shape.pointSet();
  
       
@@ -767,6 +719,32 @@ void homotopicThinning(Grille &image,char *outputfile){
 	Display2DFactory::drawImage<Gray>(board, imageRes , (unsigned int) 0 ,(unsigned int) 128);
 	board.saveSVG(outputfile); 
 }
+
+#define PI 3.14159265
+Grille imageAngle(Grille &i1,Grille &i2,Voronoi2D &v1,Voronoi2D &v2,char *outputfile){
+	Grille result(i1.domain());
+	int max = 0;
+	for (int i = 0; i <= i1.domain().upperBound()[0] ; i++){
+		for (int j = 0; j <= i1.domain().upperBound()[1] ; j++){
+			Z2i::Point p(i,j);
+			if (i1(p) != 0 && i2(p) != 0){
+				Z2i::Point q1 = v1(p);
+				Z2i::Point q2 = v2(p);
+				int l = (abs(q1[0]- q2[0]) * abs(q1[0]- q2[0])) + (abs(q1[1]- q2[1]) * abs(q1[1]- q2[1]));
+				int l1 = (abs(q1[0]- p[0]) * abs(q1[0]- p[0])) + (abs(q1[1]- p[1]) * abs(q1[1]- p[1]));
+				int l2 = (abs(p[0]- q2[0]) * abs(p[0]- q2[0])) + (abs(p[1]- q2[1]) * abs(p[1]- q2[1]));
+				result.setValue(p,acos( (l-l1-l2)/(-2*sqrt(l1)*sqrt(l2))) * 180/PI );
+				if (result(p) > max ) max = result(p);
+			} 
+		} 
+	}
+	
+	Board2D board;
+	board.clear();
+	Display2DFactory::drawImage<Gray>(board, result , (unsigned int) 0 ,max+1);
+	board.saveSVG(outputfile);  
+	return result;
+} 
 
 int main(int argc,char **argv){
 	if (argc != 2){
@@ -848,7 +826,7 @@ int main(int argc,char **argv){
 	
 	Board2D board,boardN,boardG,bTest;
 	Display2DFactory::drawImage<Gray>(board, image, (unsigned int)0, (unsigned int)129);
-	board.saveSVG("../../../monResultat.svg");
+	board.saveSVG(".33  35  37  39  ./../../monResultat.svg");
 	for (int i = 0; i < image.domain().upperBound()[0];i++){
 		 for (int j = 0; j < image.domain().upperBound()[1];j++){
 			imageN.setValue(Z2i::Point(i,j),128-image(Z2i::Point(i,j)) ); 
@@ -870,8 +848,6 @@ int main(int argc,char **argv){
 	
 	constructImage(contours[0],image1);
 	constructImage(contours[1],image2);
-	
-	constructImageBothContour(contours[0],contours[1],imageCB);
 
 	Board2D boardCB;
 	Display2DFactory::drawImage<Gray>(boardCB, imageCB, (unsigned int)0, (unsigned int)129);
@@ -891,9 +867,8 @@ int main(int argc,char **argv){
 
 	// Calcul de la Voronoi Map 
 
-	computeVoronoiMap(image1,contours[0],"../../../VM_contour1.svg","../../../VMCells_contour1.svg"); 
-	computeVoronoiMap(image2,contours[1],"../../../VM_contour2.svg","../../../VMCells_contour2.svg"); 
-	computeVoronoiMap(imageCB,contours,"../../../VM_contourBoth.svg","../../../VMCells_contourBoth.svg"); 
+	Voronoi2D VM1 = voronoiMap(image1,"../../../VM_contour1.svg","../../../VMCells_contour1.svg"); 
+	Voronoi2D VM2 = voronoiMap(image2,"../../../VM_contour2.svg","../../../VMCells_contour2.svg"); 
 
 	//Calcul de la moyenne et la différence des 2DT
 	
@@ -907,12 +882,18 @@ int main(int argc,char **argv){
 	// Reconstitution de la forme
 	Grille RDT1 = imageRDT(MA1,"../../../RDT_MA1.svg");
 	Grille RDT2 = imageRDT(MA2,"../../../RDT_MA2.svg"); 
+
+	//Carte des angles
+	
+	Grille angles = imageAngle(image1,image2,VM1,VM2,"../../../angles.svg"); 
 	
 	//Test Axe Médian du contour 
 
 	Grille DT_anneau = imageDT(imageN,"../../../DT_anneau.svg");
 	Grille MA_anneau = imageAM(DT_anneau,"../../../MA_anneau.svg");
-	 
+	
+
+	//Grille ploum = imageRDT(test,"../../../Tests/RDT_test.svg"); 
 	
 
 	//Création d'un contour avec boules réduites
