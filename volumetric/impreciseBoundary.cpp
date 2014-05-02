@@ -140,27 +140,78 @@ void getContours(vector< vector< Z2i::Point >  >&  contours,Grille &image,vector
 	for ( DigitalSetConstIterator it = it_begin;it != it_end;++it ) {
 		tmp.setValue((*it),0);	
 	}
-	
-	Z2i::Point depart = (*it_begin);
-	Z2i::Point currentPT = depart;
-	int flag;
+
+	// recherche d'un point de départ pour le contour interieur
+	int a=0;
+	int flag = 0;
+	Z2i::Point h;
 	int nbVoisin;
-	int direction = 0;
-	// extraction du contour exterieur
-	
-	do{
-		for (int i=0;i<4;i++){ 
-			if (tmp(currentPT+regard((direction+i)%4)) == 0) {
-				currentPT += regard((direction+i)%4);
-				cont1.push_back(currentPT); 
-				direction = (direction +i+3)%4;
-				break;
-			}  
+	while (!flag){
+		h[0] = x[a];
+		h[1] = maxY -y[a];
+		if (image(h) != 0){
+			a++;
 		} 
-	}while (currentPT[0] != depart[0] || currentPT[1] != depart[1]);
+		else {
+			nbVoisin = 0;
+			if (image(h+regard(0)) == 0 ) nbVoisin++;
+			if (image(h+regard(1)) == 0 ) nbVoisin++;
+			if (image(h+regard(2)) == 0 ) nbVoisin++;
+			if (image(h+regard(3)) == 0 ) nbVoisin++;
+			if (nbVoisin == 2 ) {
+				if (image(h+Z2i::Point(1,1)) == 0 || 
+				    image(h+Z2i::Point(-1,1)) == 0 || 
+				    image(h+Z2i::Point(-1,-1)) == 0 || 
+				    image(h+Z2i::Point(1,-1)) == 0 ) a++;
+				else flag = 1;
+			}
+			else a++;
+		} 
+	} 
+	Z2i::Point depart = Z2i::Point(x[a],maxY-y[a]);
+	Z2i::Point currentPT = depart;
+	Z2i::Point currentPT2 = depart;
+	int stop1 = 0, stop2 = 0;
+	int direction = 0;
+	int direction2 = 0;
+
+	
+	// extraction du contour exterieur
+	do{
+		if (!stop1){
+			for (int i=0;i<3;i++){ 
+				if (tmp(currentPT+regard((direction+i)%4)) == 0) {
+					currentPT += regard((direction+i)%4);
+					cont1.push_back(currentPT); 
+					direction = (direction +i+3)%4;
+					break;
+				}  
+			}
+		}
+		if (currentPT == depart) stop1 = 1;
+		if (!stop2){
+			flag = 0;
+			for (int i=0;i<3;i++){ 
+				if (tmp(currentPT2+regard((direction2+i)%4)) == 0 && currentPT2+regard((direction2+i)%4) != currentPT ) {
+					currentPT2 += regard((direction2+i)%4);
+					cont2.push_back(currentPT2); 
+					direction2 = (direction2 +i+3)%4;
+					flag = 1;
+					break;
+				}		  
+			}
+			if (!flag) {
+				currentPT2 = currentPT;
+				cont2.push_back(currentPT2); 
+				direction2 = direction;
+			} 
+		}
+		if (currentPT2 == depart) stop2 = 1;	 
+	}while (stop1 + stop2 != 2);
 	cont1.push_back(currentPT);
+	cont2.push_back(currentPT2);
 	// extraction des point qui ne sont pas sur le contour exterieur
-	vector<Z2i::Point> mand;
+	/*vector<Z2i::Point> mand;
 	for (int i = 0;i<=maxX;i++){
 		for (int j = 0;j<=maxY;j++){
 			if (tmp(Z2i::Point(i,j)) == 0){
@@ -222,7 +273,7 @@ void getContours(vector< vector< Z2i::Point >  >&  contours,Grille &image,vector
 	do{
 		pts.clear();
 		dir.clear();
-		for (int i=0;i<4;i++){ 
+		for (int i=0;i<3;i++){ 
 			if (tmp(currentPT+regard((direction+i)%4)) == 0) {
 				pts.push_back(currentPT+regard((direction+i)%4));
 				dir.push_back((direction+i)%4); 
@@ -260,7 +311,7 @@ void getContours(vector< vector< Z2i::Point >  >&  contours,Grille &image,vector
 			}	
 		}	
 	}while (currentPT != depart && cont2.size() < image.domain().upperBound()[0] * image.domain().upperBound()[1] ); 
-	cont2.push_back(currentPT); 
+	cont2.push_back(currentPT);*/ 
 	contours.push_back(cont1);
 	contours.push_back(cont2);
 	Display2DFactory::drawImage<Gray>(board, tmp, (unsigned int)0, (unsigned int)129);
@@ -789,7 +840,7 @@ int main(int argc,char **argv){
 	for ( Grille::Iterator it = test.begin(), itend = test.end();it != itend; ++it)
     		(*it)=0;
 	
-	test.setValue(Z2i::Point(15,15),25); 
+	test.setValue(Z2i::Point(15,15),31); 
 	
 
 	for (int i=0;i<x.size();i++){
@@ -806,7 +857,6 @@ int main(int argc,char **argv){
 	for (int i=0;i<x.size();i++){
 		f.setValue( Z2i::Point(x[i],valMaxY-y[i]+ecartY),noiseLevel[i]*noiseLevel[i]);
 	}
-	//f.setValue( Z2i::Point((valMaxX+ecartX)/2,(valMaxY+ecartY)/2),16);
 	
 	Z2i::Domain domain(Z2i::Point(0,0),image.domain().upperBound());
 	Z2i::DigitalSet set(domain);
@@ -826,7 +876,7 @@ int main(int argc,char **argv){
 	
 	Board2D board,boardN,boardG,bTest;
 	Display2DFactory::drawImage<Gray>(board, image, (unsigned int)0, (unsigned int)129);
-	board.saveSVG(".33  35  37  39  ./../../monResultat.svg");
+	board.saveSVG("../../../monResultat.svg");
 	for (int i = 0; i < image.domain().upperBound()[0];i++){
 		 for (int j = 0; j < image.domain().upperBound()[1];j++){
 			imageN.setValue(Z2i::Point(i,j),128-image(Z2i::Point(i,j)) ); 
@@ -837,6 +887,7 @@ int main(int argc,char **argv){
 	boardN.saveSVG("../../../monResultatNegatif.svg");
 	bTest.saveSVG("../../../TestOriginal.svg");
 	homotopicThinning(imageN,"../../../skeleton.svg");
+
 	//récupération des contours intérieurs et extérieurs
 	
 	vector< vector< Z2i::Point >  >  contours;
@@ -848,6 +899,7 @@ int main(int argc,char **argv){
 	
 	constructImage(contours[0],image1);
 	constructImage(contours[1],image2);
+	
 
 	Board2D boardCB;
 	Display2DFactory::drawImage<Gray>(boardCB, imageCB, (unsigned int)0, (unsigned int)129);
