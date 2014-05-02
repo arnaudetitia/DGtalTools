@@ -175,8 +175,7 @@ void getContours(vector< vector< Z2i::Point >  >&  contours,Grille &image,vector
 	int direction = 0;
 	int direction2 = 0;
 
-	
-	// extraction du contour exterieur
+	// extraction des contours
 	do{
 		if (!stop1){
 			for (int i=0;i<3;i++){ 
@@ -210,108 +209,7 @@ void getContours(vector< vector< Z2i::Point >  >&  contours,Grille &image,vector
 	}while (stop1 + stop2 != 2);
 	cont1.push_back(currentPT);
 	cont2.push_back(currentPT2);
-	// extraction des point qui ne sont pas sur le contour exterieur
-	/*vector<Z2i::Point> mand;
-	for (int i = 0;i<=maxX;i++){
-		for (int j = 0;j<=maxY;j++){
-			if (tmp(Z2i::Point(i,j)) == 0){
-				flag = 0;
-				for (int k=0;k<cont1.size();k++){
-					if (cont1[k][0] == i && cont1[k][1] == j){
-						flag = 1;
-						break; 
-					}
-				}
-				if (!flag) mand.push_back(Z2i::Point(i,j)); 
-			} 
-		} 
-	}
-	// extraction des points sont sur le contour exterieur mais qui ne sont pas sur le contour original
-	vector<Z2i::Point> forbid;
-	for (int i = 0;i<cont1.size();i++){
-		flag = 0;
-		for (int j = 0;j<x.size();j++){
-			if (cont1[i][0] == x[j] && cont1[i][1] == maxY-y[j]){
-				flag = 1;
-				break;
-			} 
-		}
-		if (!flag) forbid.push_back(Z2i::Point(cont1[i]));
-	}
-	// recherche d'un point de départ pour le contour interieur
-	int a=0;
-	flag = 0;
-	Z2i::Point h;
-	while (!flag){
-		h[0] = x[a];
-		h[1] = maxY -y[a];
-		if (image(h) != 0){
-			a++;
-		} 
-		else {
-			nbVoisin = 0;
-			if (image(h+regard(0)) == 0 ) nbVoisin++;
-			if (image(h+regard(1)) == 0 ) nbVoisin++;
-			if (image(h+regard(2)) == 0 ) nbVoisin++;
-			if (image(h+regard(3)) == 0 ) nbVoisin++;
-			if (nbVoisin == 2 ) {
-				if (image(h+Z2i::Point(1,1)) == 0 || 
-				    image(h+Z2i::Point(-1,1)) == 0 || 
-				    image(h+Z2i::Point(-1,-1)) == 0 || 
-				    image(h+Z2i::Point(1,-1)) == 0 ) a++;
-				else flag = 1;
-			}
-			else a++;
-		} 
-	} 
-	depart = Z2i::Point(x[a],maxY-y[a]);
-	currentPT = depart;
-	direction = 0;
-	vector<Z2i::Point> pts;
-	vector<int> dir;
 	 
-	do{
-		pts.clear();
-		dir.clear();
-		for (int i=0;i<3;i++){ 
-			if (tmp(currentPT+regard((direction+i)%4)) == 0) {
-				pts.push_back(currentPT+regard((direction+i)%4));
-				dir.push_back((direction+i)%4); 
-			} 
-		} 
-		for (int i =0;i< pts.size();i++){
-			flag = 0;
-			for (int j =0;j< mand.size();j++){
-				if (pts[i] == mand[j]){
-					mand.erase(mand.begin()+j);
-					cont2.push_back(pts[i]);
-					currentPT = pts[i];
-					direction = (dir[i]+3)%4;
-					flag = 1;
-					break;
-				} 
-			}
-			if (flag) break;  
-		}
-		if (!flag){
-			for (int i =0;i< pts.size();i++){
-				flag = 0;
-				for (int j =0;j< forbid.size();j++){
-					if (pts[i] == forbid[j]){
-						flag = 1;
-						break;
-					} 	
-				}
-				if (!flag) {
-					cont2.push_back(pts[i]);
-					currentPT = pts[i];
-					direction = (dir[i]+3)%4;
-					break;
-				}
-			}	
-		}	
-	}while (currentPT != depart && cont2.size() < image.domain().upperBound()[0] * image.domain().upperBound()[1] ); 
-	cont2.push_back(currentPT);*/ 
 	contours.push_back(cont1);
 	contours.push_back(cont2);
 	Display2DFactory::drawImage<Gray>(board, tmp, (unsigned int)0, (unsigned int)129);
