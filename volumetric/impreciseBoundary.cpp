@@ -753,6 +753,24 @@ Grille imageHAM (Grille &dt1,Grille &dt2,char *outputfile){// axe médian avec h
 	return result;
 }
 
+Grille imageAlphaAM (Grille &dt1,Grille &dt2,float alpha,char *outputfile){
+	assert(alpha<=1.0);
+	assert(alpha>=0.0);
+	Grille input(dt1.domain());
+	int maxX = dt1.domain().upperBound()[0];
+	int maxY = dt1.domain().upperBound()[1];
+	int rm,rM; 
+	for (int i = 0 ; i <= maxX ; i++ ){
+		for (int j = 0 ; j <= maxY ; j++ ){
+			Z2i::Point p(i,j);
+			rm = min(dt1(p),dt2(p));
+			rM = max(dt1(p),dt2(p));
+			input.setValue(p,alpha*rm + (1.0-alpha) * rM);
+		}
+	}
+	return imageAM(input,outputfile);
+}
+
 
 int main(int argc,char **argv){
 	if (argc != 2){
@@ -909,7 +927,10 @@ int main(int argc,char **argv){
 		//Algo des hyperboules
 	Grille HMA = imageHAM (DT1,DT2,"../../../HAM_contour.svg");
 	Grille RDT_HMA = imageRDT(HMA,"../../../RDT_HMA.svg");
-	
+		//Algo de l'alpha axe médian
+	Grille alphaMA = imageAlphaAM(DT1,DT2,0.0,"../../../alphaAM_alpha=0.0.svg");
+	Grille alphaMA2 = imageAlphaAM(DT1,DT2,1.0,"../../../alphaAM_alpha=1.0.svg");
+	Grille alphaMA3 = imageAlphaAM(DT1,DT2,0.5,"../../../alphaAM_alpha=0.5.svg");
 	
 
 	//Création d'un contour avec boules réduites
