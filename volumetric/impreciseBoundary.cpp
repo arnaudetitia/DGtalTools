@@ -711,30 +711,38 @@ Grille imageHAM (Grille &dt1,Grille &dt2,char *outputfile){// axe médian avec h
 							int rmq = min(dt1(q),dt2(q));
 							int rMq = max(dt1(q),dt2(q));
 							float distance = dist(p,q);
-							if ((distance >= rMp && distance+rmp <= rMp) || 
-							    (distance + rmq >= rMp && distance + rmp <= rmq ) ) {
-								flag = 1;
-								break;
-							}
-							if (distance >= rMp && distance >= rMq){
+							if (distance + rmp > rMq){
 								NULL;
 							}
-							else {
-								rcp = rMq - distance ;
-								rcq = rMp - distance ;
-								taup = (rcp-rmp)/(rMp-rmp);
-								tauq = (rcq-rmq)/(rMq-rmq);
-								if (taup > tauq) {
+							else{
+								if ((distance >= rMp && distance+rmp <= rMq) || 
+								    (distance + rmq > rMp && distance + rmp <= rMq ) ||
+								    (rmp == rMp && distance + rmp <= rMq) ||
+								    (rmq == rMq && distance + rMp <= rMq)) {
 									flag = 1;
 									break;
+								}
+								else {
+									rcp = rMq - distance ;
+									rcq = rMp - distance ;
+									taup = (rcp-rmp)/(rMp-rmp);
+									tauq = (rcq-rmq)/(rMq-rmq);
+									if (taup > tauq) {
+										flag = 1;
+										break;
+									}
 								}
 							}
  						}
 					}
 					if (flag) break;
 				}
-				if (!flag) result.setValue(p,rMp);
-				if (result(p)>maxv) maxv = result(p); 
+				if (!flag) {
+					int vm = rmp*rmp;
+					int vM = rMp*rMp; 
+					result.setValue(p,0.5*(vm + vM));
+					if (result(p)>maxv) maxv = result(p);
+				} 
 			}
 		}
 	}
@@ -789,7 +797,11 @@ int main(int argc,char **argv){
 	for ( Grille::Iterator it = test.begin(), itend = test.end();it != itend; ++it)
     		(*it)=0;
 	
-	test.setValue(Z2i::Point(15,15),31); 
+	for (int i =3;i<=27;i++){
+		for (int j =3;j<=27;j++){
+			test.setValue(Z2i::Point(i,j),128);
+		}
+	}
 	
 
 	for (int i=0;i<x.size();i++){
@@ -893,6 +905,8 @@ int main(int argc,char **argv){
 	Grille DT_anneau = imageDT(imageN,"../../../DT_anneau.svg");
 	Grille MA_anneau = imageAM(DT_anneau,"../../../MA_anneau.svg");
 
+	//Algos sur contours imprécis
+		//Algo des hyperboules
 	Grille HMA = imageHAM (DT1,DT2,"../../../HAM_contour.svg");
 	Grille RDT_HMA = imageRDT(HMA,"../../../RDT_HMA.svg");
 	
