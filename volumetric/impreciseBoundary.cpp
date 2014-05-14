@@ -559,14 +559,6 @@ Grille imageRDT(Grille& image,char* outputfile){
 		for (int j = 0;j<=image.domain().upperBound()[1];j++){
 			Z2i::Point p(i,j);
 			if (reverseDT(p) < 0 ) result.setValue(p,2);
-			if (image(p) != 0 ){
-				for (int a = i-sqrt(image(p));a<=i+sqrt(image(p));a++){
-					for (int b = j-sqrt(image(p));b<=j+sqrt(image(p));b++){
-						Z2i::Point q(a,b);
-						if (abs(j-b)*abs(j-b) + abs(i-a)*abs(i-a)< image(p) && result(q) != 2) result.setValue( q,1); 
-					}
-				}
-			} 
 		}
 	}	 
 	Board2D board;
@@ -695,6 +687,65 @@ Grille imageAngle(Grille &i1,Grille &i2,Voronoi2D &v1,Voronoi2D &v2,char *output
 	return result;
 } 
 
+float dist(Z2i::Point p1,Z2i::Point p2){
+	return sqrt((p1[0]-p2[0])*(p1[0]-p2[0])+(p1[1]-p2[1])*(p1[1]-p2[1]));
+}
+
+Grille imageHAM (Grille &dt1,Grille &dt2,char *outputfile){// axe médian avec hyperboules
+	Grille result(dt1.domain());
+	int maxX = dt1.domain().upperBound()[0];
+	int maxY = dt1.domain().upperBound()[1];
+	int flag,rmp,rMp,maxv=0;
+	float rcp,rcq,taup,tauq;
+	for (int i = 0 ; i <= maxX ; i++ ){
+		for (int j = 0 ; j <= maxY ; j++ ){
+			Z2i::Point p(i,j);
+			if ((dt1(p) != 0) && (dt2(p) != 0)){
+				flag = 0;
+				rmp = min(dt1(p),dt2(p));
+				rMp = max(dt1(p),dt2(p));
+				for (int a = 0 ; a <= maxX ; a++ ){
+					for (int b = 0 ; b <= maxY ; b++ ){
+						Z2i::Point q(a,b);
+						if ((dt1(q) != 0) && (dt2(q) != 0) && (p != q)){
+							int rmq = min(dt1(q),dt2(q));
+							int rMq = max(dt1(q),dt2(q));
+							float distance = dist(p,q);
+							if ((distance >= rMp && distance+rmp <= rMp) || 
+							    (distance + rmq >= rMp && distance + rmp <= rmq ) ) {
+								flag = 1;
+								break;
+							}
+							if (distance >= rMp && distance >= rMq){
+								NULL;
+							}
+							else {
+								rcp = rMq - distance ;
+								rcq = rMp - distance ;
+								taup = (rcp-rmp)/(rMp-rmp);
+								tauq = (rcq-rmq)/(rMq-rmq);
+								if (taup > tauq) {
+									flag = 1;
+									break;
+								}
+							}
+ 						}
+					}
+					if (flag) break;
+				}
+				if (!flag) result.setValue(p,rMp);
+				if (result(p)>maxv) maxv = result(p); 
+			}
+		}
+	}
+	Board2D board;
+	board.clear();
+	Display2DFactory::drawImage<Gray>(board, result , (unsigned int) 0 ,maxv+1);
+	board.saveSVG(outputfile);  
+	return result;
+}
+
+
 int main(int argc,char **argv){
 	if (argc != 2){
 		cout << "Usage : ./impreciseBounadary <filename>" << endl;
@@ -799,9 +850,9 @@ int main(int argc,char **argv){
 	constructImage(contours[1],image2);
 	
 
-	Board2D boardCB;
+	/*Board2D boardCB;
 	Display2DFactory::drawImage<Gray>(boardCB, imageCB, (unsigned int)0, (unsigned int)129);
-	boardCB.saveSVG("../../../contourBoth.svg"); 
+	boardCB.saveSVG("../../../contourBoth.svg");*/ 
 	
 	Board2D board1,board2;
 	Display2DFactory::drawImage<Gray>(board1, image1, (unsigned int)0, (unsigned int)129);
@@ -841,9 +892,10 @@ int main(int argc,char **argv){
 
 	Grille DT_anneau = imageDT(imageN,"../../../DT_anneau.svg");
 	Grille MA_anneau = imageAM(DT_anneau,"../../../MA_anneau.svg");
-	
 
-	//Grille ploum = imageRDT(test,"../../../Tests/RDT_test.svg"); 
+	Grille HMA = imageHAM (DT1,DT2,"../../../HAM_contour.svg");
+	Grille RDT_HMA = imageRDT(HMA,"../../../RDT_HMA.svg");
+	
 	
 
 	//Création d'un contour avec boules réduites
