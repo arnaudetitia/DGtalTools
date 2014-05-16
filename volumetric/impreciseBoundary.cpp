@@ -685,18 +685,38 @@ Grille imageAngle(Grille &i1,Grille &i2,Voronoi2D &v1,Voronoi2D &v2,char *output
 	Display2DFactory::drawImage<Gray>(board, result , (unsigned int) 0 ,max+1);
 	board.saveSVG(outputfile);  
 	return result;
-} 
+}
 
 float dist(Z2i::Point p1,Z2i::Point p2){
 	return sqrt((p1[0]-p2[0])*(p1[0]-p2[0])+(p1[1]-p2[1])*(p1[1]-p2[1]));
 }
+
+Grille intersection(Grille &contour,Z2i::Point p,int r,char *outputfile){
+	Grille result(contour.domain());
+	int maxX = contour.domain().upperBound()[0];
+	int maxY = contour.domain().upperBound()[1];
+	int rl = sqrt(r);
+	for (int a = p[0]-rl;a<=p[0]+rl;a++){
+		for (int b =p[1]-rl;b<= p[1]+rl;b++){
+			Z2i::Point q(a,b);
+			if (dist(p,q) <= rl && contour(q) != 0){
+				result.setValue(q,1);
+			}  
+		}
+	}
+	Board2D board;
+	board.clear();
+	Display2DFactory::drawImage<Gray>(board, result , 0 ,1);
+	board.saveSVG(outputfile);  
+	return result;
+} 
 
 Grille imageHAM (Grille &dt1,Grille &dt2,char *outputfile){// axe médian avec hyperboules
 	Grille result(dt1.domain());
 	int maxX = dt1.domain().upperBound()[0];
 	int maxY = dt1.domain().upperBound()[1];
 	int flag,rmp,rMp,maxv=0;
-	float rcp,rcq,taup,tauq;
+	float rcp,rcq,rcmax,taup,tauq;
 	for (int i = 0 ; i <= maxX ; i++ ){
 		for (int j = 0 ; j <= maxY ; j++ ){
 			Z2i::Point p(i,j);
@@ -704,10 +724,11 @@ Grille imageHAM (Grille &dt1,Grille &dt2,char *outputfile){// axe médian avec h
 				flag = 0;
 				rmp = min(dt1(p),dt2(p));
 				rMp = max(dt1(p),dt2(p));
+				rcmax = 0.0;
 				for (int a = 0 ; a <= maxX ; a++ ){
 					for (int b = 0 ; b <= maxY ; b++ ){
 						Z2i::Point q(a,b);
-						if ((dt1(q) != 0) && (dt2(q) != 0) && (p != q)){
+						if ( (dt1(q) != 0) && (dt2(q) != 0) && (p != q)){
 							int rmq = min(dt1(q),dt2(q));
 							int rMq = max(dt1(q),dt2(q));
 							float distance = dist(p,q);
@@ -731,17 +752,19 @@ Grille imageHAM (Grille &dt1,Grille &dt2,char *outputfile){// axe médian avec h
 										flag = 1;
 										break;
 									}
+									else{
+										rcmax = max(rcmax,rcp); 
+									}
 								}
 							}
  						}
 					}
 					if (flag) break;
 				}
-				if (!flag) {
-					int vm = rmp*rmp;
-					int vM = rMp*rMp; 
-					result.setValue(p,vM);
-					if (result(p)>maxv) maxv = result(p);
+				if (!flag) { 
+					if (rcmax < rmp) result.setValue(p,rmp*rmp);
+					else result.setValue(p,rcmax*rcmax);
+					if (result(p) > maxv) maxv = result(p);
 				} 
 			}
 		}
@@ -766,7 +789,7 @@ Grille imageAlphaAM (Grille &dt1,Grille &dt2,float alpha,char *outputfile){
 			if (dt1(p) > 0 && dt2(p) >0 ){
 				rm = min(dt1(p),dt2(p));
 				rM = max(dt1(p),dt2(p));
-				input.setValue(p,alpha*rm + (1.0-alpha) * rM);
+				input.setValue(p,alpha*rM + (1.0-alpha) * rm);
 			}
 		}
 	}
@@ -825,8 +848,8 @@ Grille imageAlphaBetaAM (Grille &dt1,Grille &dt2,float alpha,float beta,char *ou
 			if (dt1(p) > 0 && dt2(p) >0 ){
 				rm = min(dt1(p),dt2(p));
 				rM = max(dt1(p),dt2(p));
-				inputAlpha.setValue(p,alpha*rm + (1.0-alpha) * rM);
-				inputBeta.setValue(p,beta*rm + (1.0-beta) * rM);
+				inputAlpha.setValue(p,alpha*rM + (1.0-alpha) * rm);
+				inputBeta.setValue(p,beta*rM + (1.0-beta) * rm);
 			}
 		}
 	}
@@ -1022,11 +1045,13 @@ int main(int argc,char **argv){
 	//Grille DT_anneau = imageDT(imageN,"../../../DT_anneau.svg");
 	//Grille MA_anneau = imageAM(DT_anneau,"../../../MA_anneau.svg");
 
-	//Algos sur contours imprécis
+	Grille lesCC = intersection(imageN,Z2i::Point(50,50),175,"../../../test_intersection.svg");
+
+	/*//Algos sur contours imprécis
 		//Algo des hyperboules
 	Grille HMA = imageHAM (DT1,DT2,"../../../HAM_contour.svg");
 	Grille RDT_HMA = imageRDT(HMA,"../../../RDT_HMA.svg");
-	/*	//Algo de l'alpha axe médian
+		//Algo de l'alpha axe médian
 	Grille alphaMA = imageAlphaAM(DT1,DT2,0.0,"../../../alphaAM_alpha=0.0.svg");
 	Grille alphaMA2 = imageAlphaAM(DT1,DT2,1.0,"../../../alphaAM_alpha=1.0.svg");
 	Grille alphaMA3 = imageAlphaAM(DT1,DT2,0.5,"../../../alphaAM_alpha=0.5.svg");
