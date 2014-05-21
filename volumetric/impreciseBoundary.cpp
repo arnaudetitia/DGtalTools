@@ -56,7 +56,7 @@ typedef SpaceND<2> Z2;
 typedef HyperRectDomain< Z2 > Domain; 
 typedef DigitalSetSelector < Domain, BIG_DS + HIGH_BEL_DS >::Type DigitalSet;
 typedef GrayscaleColorMap<unsigned char> Gray;
-typedef ImageSelector<Z2i::Domain, unsigned int>::Type Grille;// C'est une Image mais c'est pour éviter les conflits avec le fichier  ReducedMedialAxis.h
+typedef ImageSelector<Z2i::Domain, float>::Type Grille;// C'est une Image mais c'est pour éviter les conflits avec le fichier  ReducedMedialAxis.h
 typedef ImageContainerBySTLMap<DigitalSetDomain<Z2i::DigitalSet> , DGtal::int64_t> MapImage;
 typedef IntervalThresholder<Grille::Value> Binarizer; 
 typedef SimpleThresholdForegroundPredicate<Grille> PointPredicate;
@@ -109,6 +109,10 @@ Z2i::Point regard(int i){
 		case 1: return (Z2i::Point(0,1)); 
 		case 2: return (Z2i::Point(-1,0)); 
 		case 3: return (Z2i::Point(0,-1));
+		case 4: return (Z2i::Point(1,1));
+		case 5: return (Z2i::Point(-1,1));
+		case 6: return (Z2i::Point(-1,-1));
+		case 7: return (Z2i::Point(1,-1));
 	}
 }
 
@@ -314,7 +318,7 @@ void constructImage(vector< Z2i::Point >& contour,Grille& image){
 	for (int i=0;i<contour.size();i++){
 		image.setValue(contour[i],128);
 	}
-	fill(image);
+	//fill(image);
 	
 	
 }
@@ -517,11 +521,11 @@ void computeDTAverage(Grille & image1,Grille & image2,char* outputfile){
 		} 
 	} 
 
-	unsigned int maxAv=0;
+	float maxAv=0.0;
   	for ( Grille::iterator it = DTAv.begin(), itend = DTAv.end();it != itend; ++it)
     		if ( (*it) > maxAv)  maxAv = (*it);
 
-	Display2DFactory::drawImage<HueTwice>(boardAv, DTAv, (unsigned int)0, maxAv +1);
+	Display2DFactory::drawImage<HueTwice>(boardAv, DTAv, 0.0, maxAv +0.1);
 	boardAv.saveSVG(outputfile);
 }
 
@@ -540,11 +544,11 @@ void computeDTDiff(Grille & image1,Grille & image2,char* outputfile){
 		} 
 	} 
 
-	unsigned int maxDiff=0;
+	float maxDiff=0.0;
   	for ( Grille::iterator it = DTDiff.begin(), itend = DTDiff.end();it != itend; ++it)
     		if ( (*it) > maxDiff)  maxDiff = (*it);
 
-	Display2DFactory::drawImage<Gray>(boardDiff, DTDiff, (unsigned int)0, maxDiff +1);
+	Display2DFactory::drawImage<Gray>(boardDiff, DTDiff, 0.0, maxDiff +0.1);
 	boardDiff.saveSVG(outputfile);
 }
 
@@ -588,7 +592,7 @@ Grille imageAM(Grille& image,char *outputfile){
   	PowerMap<Grille, Z2i::L2PowerMetric> power(&domainLarge, &im, &l2power);
 	
 	ReducedMedialAxis<PowerMap<Grille, Z2i::L2PowerMetric> >::Type  rdma = ReducedMedialAxis< PowerMap<Grille, Z2i::L2PowerMetric> >::getReducedMedialAxisFromPowerMap(power);
-	int maxv = 0;
+	float maxv = 0;
 	Grille result(Z2i::Domain(image.domain().lowerBound(),image.domain().upperBound()));
 	for (int i = 0;i<=result.domain().upperBound()[0];i++){
 		for (int j = 0;j<=result.domain().upperBound()[1];j++){
@@ -691,36 +695,65 @@ float dist(Z2i::Point p1,Z2i::Point p2){
 	return sqrt((p1[0]-p2[0])*(p1[0]-p2[0])+(p1[1]-p2[1])*(p1[1]-p2[1]));
 }
 
-Grille intersection(Grille &contour,Z2i::Point p,int r,char *outputfile){
+int distSquare(Z2i::Point p1,Z2i::Point p2){
+	return ((p1[0]-p2[0])*(p1[0]-p2[0])+(p1[1]-p2[1])*(p1[1]-p2[1]));
+}
+
+Grille intersection(Grille &contour,Z2i::Point p,int r,char *outputfile= ""){
 	Grille result(contour.domain());
 	int maxX = contour.domain().upperBound()[0];
 	int maxY = contour.domain().upperBound()[1];
-	int rl = sqrt(r);
-	for (int a = p[0]-rl;a<=p[0]+rl;a++){
-		for (int b =p[1]-rl;b<= p[1]+rl;b++){
-			Z2i::Point q(a,b);
-			if (dist(p,q) <= rl && contour(q) != 0){
+	for (int i = 0;i<=maxX;i++){
+		for (int j =0;j<= maxY;j++){
+			Z2i::Point q(i,j);
+			if (dist(p,q) <= sqrt(r) && contour(q) != 0){
 				result.setValue(q,1);
 			}  
 		}
 	}
-	Board2D board;
-	board.clear();
-	Display2DFactory::drawImage<Gray>(board, result , 0 ,1);
-	board.saveSVG(outputfile);  
+	if (outputfile != ""){
+		Board2D board;
+		board.clear();
+		Display2DFactory::drawImage<Gray>(board, result , 0 ,1);
+		board.saveSVG(outputfile);
+	}  
 	return result;
-} 
+}
+
+int nbComposantesConnexes(Grille &image){
+	DigitalSet image_set(image.domain());
+	int maxX = image.domain().upperBound()[0];
+	int maxY = image.domain().upperBound()[1];
+	for (unsigned int i = 0;i<maxX; i++){
+		for (unsigned int j = 0;j<maxY; j++){
+			Z2i::Point p(i,j);
+			if (image(p) != 0) image_set.insertNew(p); 
+    		}
+	}
+
+	Adj4 adj4;
+	Adj8 adj8;
+	DT4_8 dt4_8 ( adj4, adj8, JORDAN_DT );
+
+	ObjectType im ( dt4_8, image_set );
+	vector<ObjectType> obs;
+	obs.push_back(im);
+  	back_insert_iterator< vector< ObjectType > > insert( obs );
+  	unsigned int nbc0 = im.border().writeComponents( insert );
+	return nbc0;
+}
 
 Grille imageHAM (Grille &dt1,Grille &dt2,char *outputfile){// axe médian avec hyperboules
 	Grille result(dt1.domain());
 	int maxX = dt1.domain().upperBound()[0];
 	int maxY = dt1.domain().upperBound()[1];
-	int flag,rmp,rMp,maxv=0;
+	int flag;
+	int rmp,rMp,maxv=0;
 	float rcp,rcq,rcmax,taup,tauq;
 	for (int i = 0 ; i <= maxX ; i++ ){
 		for (int j = 0 ; j <= maxY ; j++ ){
 			Z2i::Point p(i,j);
-			if ((dt1(p) != 0) && (dt2(p) != 0)){
+			if ((dt1(p) > 0.0) && (dt2(p) > 0.0)){//Ce point appartient au contour interieur
 				flag = 0;
 				rmp = min(dt1(p),dt2(p));
 				rMp = max(dt1(p),dt2(p));
@@ -728,19 +761,20 @@ Grille imageHAM (Grille &dt1,Grille &dt2,char *outputfile){// axe médian avec h
 				for (int a = 0 ; a <= maxX ; a++ ){
 					for (int b = 0 ; b <= maxY ; b++ ){
 						Z2i::Point q(a,b);
-						if ( (dt1(q) != 0) && (dt2(q) != 0) && (p != q)){
+						if ( (dt1(q) > 0.0) && (dt2(q) > 0.0) && (p != q)){
 							int rmq = min(dt1(q),dt2(q));
 							int rMq = max(dt1(q),dt2(q));
 							float distance = dist(p,q);
-							if (distance + rmp > rMq){
-								NULL;
+							if (distance + rmp > rMq){//p ne peut être contenu dans une boule de q
 							}
 							else{
 								if ((distance >= rMp && distance+rmp <= rMq) || 
 								    (distance + rmq > rMp && distance + rmp <= rMq ) ||
 								    (rmp == rMp && distance + rmp <= rMq) ||
 								    (rmq == rMq && distance + rMp <= rMq)) {
-									flag = 1;
+									// p ne contient aucune boule de q 
+									// au moins une boule de q contient au moins une boule de p 
+									flag = 1; 
 									break;
 								}
 								else {
@@ -761,7 +795,7 @@ Grille imageHAM (Grille &dt1,Grille &dt2,char *outputfile){// axe médian avec h
 					}
 					if (flag) break;
 				}
-				if (!flag) { 
+				if (!flag) {  
 					if (rcmax < rmp) result.setValue(p,rmp*rmp);
 					else result.setValue(p,rcmax*rcmax);
 					if (result(p) > maxv) maxv = result(p);
@@ -771,7 +805,7 @@ Grille imageHAM (Grille &dt1,Grille &dt2,char *outputfile){// axe médian avec h
 	}
 	Board2D board;
 	board.clear();
-	Display2DFactory::drawImage<Gray>(board, result , (unsigned int) 0 ,maxv+1);
+	Display2DFactory::drawImage<Gray>(board, result , 0.0 ,maxv+0.1);
 	board.saveSVG(outputfile);  
 	return result;
 }
@@ -783,6 +817,7 @@ Grille imageAlphaAM (Grille &dt1,Grille &dt2,float alpha,char *outputfile){
 	int maxX = dt1.domain().upperBound()[0];
 	int maxY = dt1.domain().upperBound()[1];
 	int rm,rM; 
+	// Formule pour le calcul de l'axe médian
 	for (int i = 0 ; i <= maxX ; i++ ){
 		for (int j = 0 ; j <= maxY ; j++ ){
 			Z2i::Point p(i,j);
@@ -805,10 +840,11 @@ Grille imageAlphaAM (Grille &dt1,Grille &dt2,float alpha,char *outputfile){
 					for (int jb = 0;jb<= maxY;jb++){
 						Z2i::Point q(ib,jb);
 						if (input(q) != 0 && p != q){
-							int distance = (int)dist(p,q);
+							int distance = dist(p,q);
 							if ( distance >= input(q) ){NULL;}
 							else {
 								if (distance + input(p) <= input(q)){
+									// la boule p est contenu dans la boule q
 									flag = 1;
 									break;
 								}
@@ -827,7 +863,7 @@ Grille imageAlphaAM (Grille &dt1,Grille &dt2,float alpha,char *outputfile){
 
 	Board2D board;
 	board.clear();
-	Display2DFactory::drawImage<Gray>(board, result , (unsigned int) 0 ,maxv+1);
+	Display2DFactory::drawImage<Gray>(board, result , 0.0 ,maxv+0.1);
 	board.saveSVG(outputfile);  
 	return result;
 }
@@ -855,7 +891,7 @@ Grille imageAlphaBetaAM (Grille &dt1,Grille &dt2,float alpha,float beta,char *ou
 	}
 	Grille result(dt1.domain());
 	int flag;
-	int maxv=0;
+	float maxv=0;
 	for (int ia = 0;ia<= maxX;ia++){
 		for (int ja = 0;ja<= maxY;ja++){
 			Z2i::Point p(ia,ja);
@@ -869,6 +905,7 @@ Grille imageAlphaBetaAM (Grille &dt1,Grille &dt2,float alpha,float beta,char *ou
 							if ( distance >= inputBeta(q) ){NULL;}
 							else {
 								if (distance + inputAlpha(p) <= inputBeta(q)){
+									// la boule p est contenu dans la boule q
 									flag = 1;
 									break;
 								}
@@ -887,9 +924,82 @@ Grille imageAlphaBetaAM (Grille &dt1,Grille &dt2,float alpha,float beta,char *ou
 
 	Board2D board;
 	board.clear();
-	Display2DFactory::drawImage<Gray>(board, result , (unsigned int) 0 ,maxv+1);
+	Display2DFactory::drawImage<Gray>(board, result , 0.0 ,maxv+0.1);
 	board.saveSVG(outputfile);  
 	return result;
+}
+
+int nbPoints(Grille &image){
+	int cpt  =0;
+	int maxX = image.domain().upperBound()[0];
+	int maxY = image.domain().upperBound()[1];
+	for (int i =0;i<= maxX;i++){
+		for (int j =0;j<= maxY;j++){
+			Z2i::Point p(i,j);
+			cpt += (image(p) != 0);
+		}
+	}
+	return cpt;
+}
+
+void preuve(Grille &contour,Grille &dt1,Grille &dt2,Grille &ma){
+	int maxX = dt1.domain().upperBound()[0];
+	int maxY = dt1.domain().upperBound()[1];
+	int rm;
+	int rM;
+	Grille lesCC(dt1.domain());
+	Grille exemple(dt1.domain());
+	int maxv = 0;
+	for (int a =0;a<= maxX;a++){
+		for (int b =0;b<= maxY;b++){
+			Z2i::Point x(a,b);
+			if(contour(x) != 0) exemple.setValue(x,2);
+		}
+	}
+	int flag = 0;
+	for (int i =0;i<= maxX;i++){
+		for (int j =0;j<= maxY;j++){
+			Z2i::Point p(i,j);
+			if (ma(p) != 0 ){
+				cout << p << ":" << endl;
+				rm = min(dt1(p),dt2(p));
+				rM = max(dt1(p),dt2(p));
+				for (int r = rm;r<=rM;r++){
+					lesCC = intersection(contour,p,r*r);
+					cout << nbPoints(lesCC) << " " << nbComposantesConnexes(lesCC)<< endl;
+					if (nbComposantesConnexes(lesCC) == 1 && !flag){
+						//flag = 1;
+						Grille boule(dt1.domain());
+						for (int a =0;a<= maxX;a++){
+							for (int b =0;b<= maxY;b++){
+								Z2i::Point x(a,b);
+								if(distSquare(p,x) <= ma(p) ) boule.setValue(x,1);
+							}
+						}
+						for (int a =0;a<= maxX;a++){
+							for (int b =0;b<= maxY;b++){
+								Z2i::Point x(a,b);
+								int y=0;
+								if(boule(x) == 1){
+									for (int d = 0; d<8;d++){
+										if (boule(x+regard(d)) == 1) y++;
+									} 
+									if (y < 8) {
+										if (exemple(x) == 2 || exemple(x) == 3 ) exemple.setValue(x,3);
+										else exemple.setValue(x,1);
+									}
+								}
+							}
+						}
+					}
+				}
+			}
+		}
+	}
+	Board2D b;
+	b.clear();
+	Display2DFactory::drawImage<Gray>(b, exemple , (unsigned int) 0 ,3);
+	b.saveSVG("../../../exemple.svg");
 }
 
 
@@ -940,10 +1050,10 @@ int main(int argc,char **argv){
 	for (int i =3;i<=27;i++){
 		for (int j =3;j<=27;j++){
 			test.setValue(Z2i::Point(i,j),128);
+			
 		}
 	}
 	
-
 	for (int i=0;i<x.size();i++){
 		for (int a = max(0,x[i]-(noiseLevel[i]-1) ) ; a <= min(x[i]+(noiseLevel[i]-1),valMaxX+ecartX); a++ ){
 			for (int b = max(0,y[i]-(noiseLevel[i]-1) ) ; b <= min(y[i]+(noiseLevel[i]-1),valMaxY+ecartY); b++ ){
@@ -1000,6 +1110,12 @@ int main(int argc,char **argv){
 	
 	constructImage(contours[0],image1);
 	constructImage(contours[1],image2);
+
+	Grille image1filled = image1;
+	Grille image2filled = image2;
+	fill(image1filled);
+	fill(image2filled);
+	
 	
 
 	/*Board2D boardCB;
@@ -1014,14 +1130,14 @@ int main(int argc,char **argv){
 
 	//Calcul de la transformée en distance 
 	
-	Grille DT1 = imageDT(image1,"../../../DT_contour1.svg");
-	Grille DT2 = imageDT(image2,"../../../DT_contour2.svg");
+	Grille DT1 = imageDT(image1filled,"../../../DT_contour1.svg");
+	Grille DT2 = imageDT(image2filled,"../../../DT_contour2.svg");
 	Grille DTTest = imageDT(test,"../../../DT_test.svg");
 
 	// Calcul de la Voronoi Map 
 
-	Voronoi2D VM1 = voronoiMap(image1,"../../../VM_contour1.svg","../../../VMCells_contour1.svg"); 
-	Voronoi2D VM2 = voronoiMap(image2,"../../../VM_contour2.svg","../../../VMCells_contour2.svg"); 
+	Voronoi2D VM1 = voronoiMap(image1filled,"../../../VM_contour1.svg","../../../VMCells_contour1.svg"); 
+	Voronoi2D VM2 = voronoiMap(image2filled,"../../../VM_contour2.svg","../../../VMCells_contour2.svg"); 
 
 	//Calcul de la moyenne et la différence des 2DT
 	
@@ -1034,7 +1150,9 @@ int main(int argc,char **argv){
 
 	// Reconstitution de la forme
 	Grille RDT1 = imageRDT(MA1,"../../../RDT_MA1.svg");
-	Grille RDT2 = imageRDT(MA2,"../../../RDT_MA2.svg"); 
+	Grille RDT2 = imageRDT(MA2,"../../../RDT_MA2.svg");
+
+	//preuve(image1,DT1,DT1,MA1);
 
 	//Carte des angles
 	
@@ -1044,13 +1162,12 @@ int main(int argc,char **argv){
 
 	//Grille DT_anneau = imageDT(imageN,"../../../DT_anneau.svg");
 	//Grille MA_anneau = imageAM(DT_anneau,"../../../MA_anneau.svg");
-
-	Grille lesCC = intersection(imageN,Z2i::Point(50,50),175,"../../../test_intersection.svg");
-
-	/*//Algos sur contours imprécis
+	
+	//Algos sur contours imprécis
 		//Algo des hyperboules
-	Grille HMA = imageHAM (DT1,DT2,"../../../HAM_contour.svg");
+	/*Grille HMA = imageHAM (DT1,DT2,"../../../HAM_contour.svg");
 	Grille RDT_HMA = imageRDT(HMA,"../../../RDT_HMA.svg");
+	
 		//Algo de l'alpha axe médian
 	Grille alphaMA = imageAlphaAM(DT1,DT2,0.0,"../../../alphaAM_alpha=0.0.svg");
 	Grille alphaMA2 = imageAlphaAM(DT1,DT2,1.0,"../../../alphaAM_alpha=1.0.svg");
@@ -1065,9 +1182,12 @@ int main(int argc,char **argv){
 
 	Grille RDT_alphaBetaMA = imageRDT(alphaBetaMA,"../../../RDT_alphabetaAM_alpha=0.0_beta=0.0.svg");
 	Grille RDT_alphaBetaMA2 = imageRDT(alphaBetaMA2,"../../../RDT_alphabetaAM_alpha=1.0_beta=1.0.svg");
-
+	*/	
+	float u = 8.99999;
+	cout << u << " " << int(u); 
+	cout << (u>8) << endl;
 	//Création d'un contour avec boules réduites
 	//contourBallReduced(x,y,noiseLevel,freeman,valMaxX+20,valMaxY+20); 
-	*/
+	
 	return 0; 
 }
