@@ -466,6 +466,28 @@ Grille imageDT(Grille& image,char *outputfile){
 	return result;
 } 
 
+Grille imageDT(Voronoi2D& image,char *outputfile){
+	Grille result(image.domain());
+	int maxv=0;
+	for(Voronoi2D::Domain::ConstIterator it = image.domain().begin(),
+      	itend = image.domain().end(); it != itend; ++it)
+  	{
+   		Voronoi2D::Value site = image( *it );   //closest site to (*it)
+		if (site != *it){
+			Z2i::Point p(site[0]-(*it)[0],site[1]-(*it)[1]);
+			result.setValue((*it),p[0]*p[0]+p[1]*p[1]);
+			if (result(*it) > maxv) maxv=result(*it); 
+		}
+		
+  	}
+	cout << maxv << endl;
+	Board2D board;
+	board.clear();
+  	Display2DFactory::drawImage<HueTwice>(board, result, 0, maxv + 1); 
+	board.saveSVG ( outputfile );
+	return result;
+} 
+
 Voronoi2D voronoiMap(Grille& image,char *outputfile,char* outputfileCells){
 	
 	Z2i::DigitalSet set(image.domain());
@@ -579,17 +601,17 @@ Grille imageAM(Grille& image,char *outputfile){
 	Z2i::Domain domain(Z2i::Point(0,0),image.domain().upperBound());
   	Z2i::Domain domainLarge(Z2i::Point(0,0),image.domain().upperBound());
 	
-	Grille im(domain);
+	/*Grille im(domain);
 	for (int i = 0;i<=image.domain().upperBound()[0];i++){
 		for (int j = 0;j<=image.domain().upperBound()[1];j++){
 			Z2i::Point p(i,j); 
 			im.setValue(p,image(p) * image(p));  
 		} 
-	}
+	}*/
 	 
 	
 	Z2i::L2PowerMetric l2power;
-  	PowerMap<Grille, Z2i::L2PowerMetric> power(&domainLarge, &im, &l2power);
+  	PowerMap<Grille, Z2i::L2PowerMetric> power(&domainLarge, &image, &l2power);
 	
 	ReducedMedialAxis<PowerMap<Grille, Z2i::L2PowerMetric> >::Type  rdma = ReducedMedialAxis< PowerMap<Grille, Z2i::L2PowerMetric> >::getReducedMedialAxisFromPowerMap(power);
 	float maxv = 0;
@@ -691,7 +713,7 @@ Grille imageAngle(Grille &i1,Grille &i2,Voronoi2D &v1,Voronoi2D &v2,char *output
 	return result;
 }
 
-float dist(Z2i::Point p1,Z2i::Point p2){
+double dist(Z2i::Point p1,Z2i::Point p2){
 	return sqrt((p1[0]-p2[0])*(p1[0]-p2[0])+(p1[1]-p2[1])*(p1[1]-p2[1]));
 }
 
@@ -768,16 +790,18 @@ Grille imageHAM (Grille &dt1,Grille &dt2,char *outputfile){// axe médian avec h
 							if (distance + rmp > rMq){//p ne peut être contenu dans une boule de q
 							}
 							else{
-								if ((distance >= rMp && distance+rmp <= rMq) || 
-								    (distance + rmq > rMp && distance + rmp <= rMq ) ||
-								    (rmp == rMp && distance + rmp <= rMq) ||
-								    (rmq == rMq && distance + rMp <= rMq)) {
+								if (
+								    //(distance >= rMp && distance+rmp <= rMq) || 
+								    (distance + rmq > rMp && distance + rmp <= rMq ) //||
+								    //(rmp == rMp && distance + rmp <= rMq) ||
+								    //(rmq == rMq && distance + rMp <= rMq)
+								    ) {
 									// p ne contient aucune boule de q 
 									// au moins une boule de q contient au moins une boule de p 
 									flag = 1; 
 									break;
 								}
-								else {
+								/*else {
 									rcp = rMq - distance ;
 									rcq = rMp - distance ;
 									taup = (rcp-rmp)/(rMp-rmp);
@@ -789,7 +813,7 @@ Grille imageHAM (Grille &dt1,Grille &dt2,char *outputfile){// axe médian avec h
 									else{
 										rcmax = max(rcmax,rcp); 
 									}
-								}
+								}*/
 							}
  						}
 					}
@@ -806,6 +830,31 @@ Grille imageHAM (Grille &dt1,Grille &dt2,char *outputfile){// axe médian avec h
 	Board2D board;
 	board.clear();
 	Display2DFactory::drawImage<Gray>(board, result , 0.0 ,maxv+0.1);
+	board.saveSVG(outputfile);  
+	return result;
+}
+
+Grille imagePowerMap(Grille &dt,char *outputfile){
+	Z2i::L2PowerMetric l2power;
+	Z2i::Domain dom = dt.domain();
+  	PowerMap<Grille, Z2i::L2PowerMetric> power(&dom, &dt, &l2power);
+	Grille result(dt.domain());
+	int maxX = dt.domain().upperBound()[0];
+	int maxY = dt.domain().upperBound()[1];
+	int maxv =0, minv = 0;
+	for (int i = 0 ; i <= maxX ; i++ ){
+		for (int j = 0 ; j <= maxY ; j++ ){
+			Z2i::Point p(i,j);
+			//cout << dt(p) << " " << pow(p[0]-power(p)[0],2)+pow(p[1]-power(p)[1],2) << " " << dist(p,power(p)) << endl;
+			if (dt(p) != 0) result.setValue(p,pow(p[0]-power(p)[0],2)+pow(p[1]-power(p)[1],2)-dt(p) );
+			if (result(p) >= maxv) maxv = result(p); 
+			if (result(p) <= minv) minv = result(p); 
+		}
+	}
+	Board2D board;
+	board.clear();
+	cout << minv << " " << maxv << endl;
+	Display2DFactory::drawImage<Gray>(board, result ,minv ,maxv);
 	board.saveSVG(outputfile);  
 	return result;
 }
@@ -840,10 +889,12 @@ Grille imageAlphaAM (Grille &dt1,Grille &dt2,float alpha,char *outputfile){
 					for (int jb = 0;jb<= maxY;jb++){
 						Z2i::Point q(ib,jb);
 						if (input(q) != 0 && p != q){
-							int distance = dist(p,q);
-							if ( distance >= input(q) ){NULL;}
+							int distanceSquare = distSquare(p,q);
+							//int distance = dist(p,q);
+							if ( distanceSquare >= input(q) ){
+							}
 							else {
-								if (distance + input(p) <= input(q)){
+					if (distanceSquare + 2*lrint(sqrt(distanceSquare))*lrint(sqrt(input(p))) + input(p) <= input(q) ) {
 									// la boule p est contenu dans la boule q
 									flag = 1;
 									break;
@@ -854,7 +905,7 @@ Grille imageAlphaAM (Grille &dt1,Grille &dt2,float alpha,char *outputfile){
 					if (flag) break;
 				}
 				if (!flag){
-					result.setValue(p,input(p) * input(p));
+					result.setValue(p,input(p));
 					if (result(p) >= maxv) maxv = result(p); 
 				}
 			}
@@ -866,6 +917,34 @@ Grille imageAlphaAM (Grille &dt1,Grille &dt2,float alpha,char *outputfile){
 	Display2DFactory::drawImage<Gray>(board, result , 0.0 ,maxv+0.1);
 	board.saveSVG(outputfile);  
 	return result;
+}
+
+void allFAlpha(Grille &dt1,Grille &dt2,float step,char *outputfileAM,char *outputfileRDT){
+	int n = 1.0/step;
+	Grille AM(dt1.domain());
+	Grille RDT(dt1.domain());
+	Grille resultAM(dt1.domain());
+	Grille resultRDT(dt1.domain());
+	int maxX = dt1.domain().upperBound()[0];
+	int maxY = dt1.domain().upperBound()[1];
+	for (int s =0;s<=n;s++){
+		AM = imageAlphaAM(dt1,dt2,s*step,"");
+		RDT = imageRDT(AM,"");
+		for (int i = 0;i<= maxX;i++){
+			for (int j = 0;j<= maxY;j++){
+				Z2i::Point p(i,j);
+				if (AM(p) != 0) resultAM.setValue(p,resultAM(p)+1);
+				if (RDT(p) != 0) resultRDT.setValue(p,resultRDT(p)+1);
+			}
+		}
+	}
+	Board2D boardAM,boardRDT;
+	boardAM.clear();
+	boardRDT.clear();
+	Display2DFactory::drawImage<Gray>(boardAM, resultAM , 0 ,n+1);
+	Display2DFactory::drawImage<Gray>(boardRDT, resultRDT , 0 ,n+1);
+	boardAM.saveSVG(outputfileAM); 
+	boardRDT.saveSVG(outputfileRDT);
 }
 
 Grille imageAlphaBetaAM (Grille &dt1,Grille &dt2,float alpha,float beta,char *outputfile){
@@ -1102,7 +1181,7 @@ int main(int argc,char **argv){
 	//récupération des contours intérieurs et extérieurs
 	
 	vector< vector< Z2i::Point >  >  contours;
-	
+
 	getContours(contours,image,x,y,noiseLevel);
 	Grille image1 ( Z2i::Domain(lower,upper));
 	Grille image2 ( Z2i::Domain(lower,upper));
@@ -1128,16 +1207,17 @@ int main(int argc,char **argv){
 	board1.saveSVG("../../../contour1.svg");
 	board2.saveSVG("../../../contour2.svg");
 
+
+	Voronoi2D VM1 = voronoiMap(image1filled,"../../../VM_contour1.svg","../../../VMCells_contour1.svg"); 
+	Voronoi2D VM2 = voronoiMap(image2filled,"../../../VM_contour2.svg","../../../VMCells_contour2.svg"); 
+
 	//Calcul de la transformée en distance 
 	
 	Grille DT1 = imageDT(image1filled,"../../../DT_contour1.svg");
 	Grille DT2 = imageDT(image2filled,"../../../DT_contour2.svg");
-	Grille DTTest = imageDT(test,"../../../DT_test.svg");
 
-	// Calcul de la Voronoi Map 
-
-	Voronoi2D VM1 = voronoiMap(image1filled,"../../../VM_contour1.svg","../../../VMCells_contour1.svg"); 
-	Voronoi2D VM2 = voronoiMap(image2filled,"../../../VM_contour2.svg","../../../VMCells_contour2.svg"); 
+	Grille DTVM1 = imageDT(VM1,"../../../DT_VM_contour1.svg");
+	Grille DTVM2 = imageDT(VM2,"../../../DT_VM_contour2.svg");
 
 	//Calcul de la moyenne et la différence des 2DT
 	
@@ -1145,8 +1225,8 @@ int main(int argc,char **argv){
 	computeDTDiff(DT1,DT2,"../../../DT_contourDiff.svg");
 
 	// Calcul de l'axe médian
-	Grille MA1 = imageAM(DT1,"../../../MA_contour1.svg");
-	Grille MA2 = imageAM(DT2,"../../../MA_contour2.svg");
+	Grille MA1 = imageAM(DTVM1,"../../../MA_contour1.svg");
+	Grille MA2 = imageAM(DTVM2,"../../../MA_contour2.svg");
 
 	// Reconstitution de la forme
 	Grille RDT1 = imageRDT(MA1,"../../../RDT_MA1.svg");
@@ -1165,27 +1245,27 @@ int main(int argc,char **argv){
 	
 	//Algos sur contours imprécis
 		//Algo des hyperboules
-	/*Grille HMA = imageHAM (DT1,DT2,"../../../HAM_contour.svg");
-	Grille RDT_HMA = imageRDT(HMA,"../../../RDT_HMA.svg");
+	//Grille HMA = imageHAM (DT1,DT2,"../../../HAM_contour.svg");
+	//Grille RDT_HMA = imageRDT(HMA,"../../../RDT_HMA.svg");
 	
 		//Algo de l'alpha axe médian
-	Grille alphaMA = imageAlphaAM(DT1,DT2,0.0,"../../../alphaAM_alpha=0.0.svg");
-	Grille alphaMA2 = imageAlphaAM(DT1,DT2,1.0,"../../../alphaAM_alpha=1.0.svg");
-	Grille alphaMA3 = imageAlphaAM(DT1,DT2,0.5,"../../../alphaAM_alpha=0.5.svg");
-
-	Grille RDT_alphaMA = imageRDT(alphaMA,"../../../RDT_alphaAM_alpha=0.0.svg");
-	Grille RDT_alphaMA2 = imageRDT(alphaMA2,"../../../RDT_alphaAM_alpha=1.0.svg");
-	Grille RDT_alphaMA3 = imageRDT(alphaMA3,"../../../RDT_alphaAM_alpha=0.5.svg");
+	Grille alphaMA = imageAlphaAM(DTVM1,DTVM2,0.0,"../../../alphaAM_alpha=0.0.svg");
+	//Grille alphaMA2 = imageAlphaAM(DT1,DT2,1.0,"../../../alphaAM_alpha=1.0.svg");
+	//Grille alphaMA3 = imageAlphaAM(DT1,DT2,0.5,"../../../alphaAM_alpha=0.5.svg");
+	//allFAlpha(DT1,DT2,0.1,"../../../allFAlphaAM.svg","../../../allFAlphaRDT.svg");
+	Grille PM1 = imagePowerMap(DTVM1,"../../../PM_contour1.svg");
+	Grille PM2 = imagePowerMap(DTVM2,"../../../PM_contour2.svg");
+	
+	//Grille RDT_alphaMA = imageRDT(alphaMA,"../../../RDT_alphaAM_alpha=0.0.svg");
+	//Grille RDT_alphaMA2 = imageRDT(alphaMA2,"../../../RDT_alphaAM_alpha=1.0.svg");
+	//Grille RDT_alphaMA3 = imageRDT(alphaMA3,"../../../RDT_alphaAM_alpha=0.5.svg");
 		//Algo de l'alpha-beta axe médian
-	Grille alphaBetaMA = imageAlphaBetaAM(DT1,DT2,0.0,0.0,"../../../alphabetaAM_alpha=0.0_beta=0.0.svg");
-	Grille alphaBetaMA2 = imageAlphaBetaAM(DT1,DT2,1.0,1.0,"../../../alphabetaAM_alpha=1.0_beta=1.0.svg");
+	//Grille alphaBetaMA = imageAlphaBetaAM(DT1,DT2,0.0,0.0,"../../../alphabetaAM_alpha=0.0_beta=0.0.svg");
+	//Grille alphaBetaMA2 = imageAlphaBetaAM(DT1,DT2,1.0,1.0,"../../../alphabetaAM_alpha=1.0_beta=1.0.svg");
 
-	Grille RDT_alphaBetaMA = imageRDT(alphaBetaMA,"../../../RDT_alphabetaAM_alpha=0.0_beta=0.0.svg");
-	Grille RDT_alphaBetaMA2 = imageRDT(alphaBetaMA2,"../../../RDT_alphabetaAM_alpha=1.0_beta=1.0.svg");
-	*/	
-	float u = 8.99999;
-	cout << u << " " << int(u); 
-	cout << (u>8) << endl;
+	//Grille RDT_alphaBetaMA = imageRDT(alphaBetaMA,"../../../RDT_alphabetaAM_alpha=0.0_beta=0.0.svg");
+	//Grille RDT_alphaBetaMA2 = imageRDT(alphaBetaMA2,"../../../RDT_alphabetaAM_alpha=1.0_beta=1.0.svg");
+	
 	//Création d'un contour avec boules réduites
 	//contourBallReduced(x,y,noiseLevel,freeman,valMaxX+20,valMaxY+20); 
 	
