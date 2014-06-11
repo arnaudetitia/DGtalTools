@@ -76,7 +76,6 @@ typedef Object<DT4_8, DigitalSet> ObjectType48;
 typedef typename DigitalSet::ConstIterator DigitalSetConstIterator;
 typedef ReverseDistanceTransformation< Grille , L2PowerMetric > RDT;
 
-
 void readData(char *filename,vector<int>&x ,vector<int>&y ,vector<int>&noiseLevel,vector<int>&freeman){
 	ifstream data(filename);
 	if (data == NULL) exit(1);
@@ -102,6 +101,39 @@ void readData(char *filename,vector<int>&x ,vector<int>&y ,vector<int>&noiseLeve
 	} 
 	data.close();
 } 
+
+void printImageNB(Grille g,char *outputfile,float facteur=1.0){
+	int maxX = g.domain().upperBound()[0];
+	int maxY = g.domain().upperBound()[1];
+	float maxv = 0.0;
+	for (int i =0;i<=maxX;i++){
+		for (int j =0;j<=maxY;j++){
+			Z2i::Point p(i,j);
+			g.setValue(p,facteur*g(p));
+			if (g(p) > maxv) maxv = g(p);
+		}
+	}
+	Board2D board;
+	board.clear();
+	Display2DFactory::drawImage<Gray>(board, g , 0.0 ,maxv+0.1);
+	board.saveSVG(outputfile);  
+}
+
+void printImageColor(Grille g,char *outputfile){
+	int maxX = g.domain().upperBound()[0];
+	int maxY = g.domain().upperBound()[1];
+	float maxv = 0.0;
+	for (int i =0;i<=maxX;i++){
+		for (int j =0;j<=maxY;j++){
+			Z2i::Point p(i,j);
+			if (g(p) > maxv) maxv = g(p);
+		}
+	}
+	Board2D board;
+	board.clear();
+	Display2DFactory::drawImage<HueTwice>(board, g , 0.0 ,maxv+0.1);
+	board.saveSVG(outputfile);
+}
 
 Z2i::Point regard(int i){
 	switch(i){
@@ -480,7 +512,6 @@ Grille imageDT(Voronoi2D& image,char *outputfile){
 		}
 		
   	}
-	cout << maxv << endl;
 	Board2D board;
 	board.clear();
   	Display2DFactory::drawImage<HueTwice>(board, result, 0, maxv + 1); 
@@ -834,27 +865,89 @@ Grille imageHAM (Grille &dt1,Grille &dt2,char *outputfile){// axe médian avec h
 	return result;
 }
 
-Grille imagePowerMap(Grille &dt,char *outputfile){
-	Z2i::L2PowerMetric l2power;
-	Z2i::Domain dom = dt.domain();
-  	PowerMap<Grille, Z2i::L2PowerMetric> power(&dom, &dt, &l2power);
-	Grille result(dt.domain());
-	int maxX = dt.domain().upperBound()[0];
-	int maxY = dt.domain().upperBound()[1];
-	int maxv =0, minv = 0;
+void parabolloide(Grille &g,Z2i::Point &point,float dt,float e = 0.0){
+	int maxX = g.domain().upperBound()[0];
+	int maxY = g.domain().upperBound()[1];
 	for (int i = 0 ; i <= maxX ; i++ ){
 		for (int j = 0 ; j <= maxY ; j++ ){
 			Z2i::Point p(i,j);
-			//cout << dt(p) << " " << pow(p[0]-power(p)[0],2)+pow(p[1]-power(p)[1],2) << " " << dist(p,power(p)) << endl;
-			if (dt(p) != 0) result.setValue(p,pow(p[0]-power(p)[0],2)+pow(p[1]-power(p)[1],2)-dt(p) );
-			if (result(p) >= maxv) maxv = result(p); 
-			if (result(p) <= minv) minv = result(p); 
+			if (e == 0.0) g.setValue(p,distSquare(p,point)-dt);
+			else g.setValue(p,distSquare(p,point)+e);
+		}
+	}
+}
+
+Grille negatif(Grille &g){
+	int maxX = g.domain().upperBound()[0];
+	int maxY = g.domain().upperBound()[1];
+	Grille result(g.domain());
+	for (int i = 0 ; i <= maxX ; i++ ){
+		for (int j = 0 ; j <= maxY ; j++ ){
+			Z2i::Point p(i,j);
+			if (g(p) == 0) result.setValue(p,1);
+			else  result.setValue(p,0);
+		}
+	}
+	return result;
+}
+
+Grille imageAlphaMin(Grille &dt1,Grille &dt2,Grille &dtinv,char *outputfile){
+	Z2i::L2PowerMetric l2power;
+	Z2i::Domain dom = dt1.domain();
+	Grille n1 = negatif(dt1);
+	Grille n2 = negatif(dt2);
+    Grille ninv = negatif(dtinv);
+    PowerMap<Grille, Z2i::L2PowerMetric> powerinv(&dom, &ninv, &l2power);
+  	PowerMap<Grille, Z2i::L2PowerMetric> power1(&dom, &n1, &l2power);
+	PowerMap<Grille, Z2i::L2PowerMetric> power2(&dom, &n2, &l2power);
+    Grille result(dt1.domain());
+	int maxX = dt1.domain().upperBound()[0];
+	int maxY = dt1.domain().upperBound()[1];
+	Grille fm(dt1.domain()),fM(dt1.domain());
+    float rm,rM,d1,d2,dinv;
+	float x,e;
+	for (int i = 0 ; i <= maxX ; i++ ){
+		for (int j = 0 ; j <= maxY ; j++ ){
+			Z2i::Point p(i,j);
+            result.setValue(p,1.4);
+		}
+	}
+	for (int i = 0 ; i <= maxX ; i++ ){
+		for (int j = 0 ; j <= maxY ; j++ ){
+			Z2i::Point p(i,j);
+            if (dt1(p) != 0 && dt2(p) != 0 ) {
+                Z2i::Point powerp1 = powerinv(p);
+                Z2i::Point powerp2 = power2(p);
+                d1 = dist(p,powerp1);
+                d2 = dist(p,powerp2);
+                rm = min(d1,d2);
+                rM = max(d1,d2);
+                parabolloide(fm,p,dt1(p));
+                parabolloide(fM,p,dt2(p));
+                for (int a = 0 ; a <= maxX ; a++ ){
+                    for (int b = 0 ; b <= maxY ; b++ ){
+                        Z2i::Point q(a,b);
+                        if (fm(q) <= 0 ) result.setValue(q,0.0);
+                        else{
+                            if (fM(q) < 0 ){
+                                x = (float)(fm(q)/(fm(q)-fM(q)));
+                                if (x>=0.0 && x<=1.0) result.setValue(q,(float)(min(x,result(q))));
+                            }
+                        }
+                    }
+                }
+			}
+		}
+	}
+	for (int i = 0 ; i <= maxX ; i++ ){
+		for (int j = 0 ; j <= maxY ; j++ ){
+			Z2i::Point p(i,j);
+            result.setValue(p,100 * result(p));
 		}
 	}
 	Board2D board;
 	board.clear();
-	cout << minv << " " << maxv << endl;
-	Display2DFactory::drawImage<Gray>(board, result ,minv ,maxv);
+    Display2DFactory::drawImage<Gray>(board, result ,0,140);
 	board.saveSVG(outputfile);  
 	return result;
 }
@@ -1017,7 +1110,7 @@ int nbPoints(Grille &image){
 			Z2i::Point p(i,j);
 			cpt += (image(p) != 0);
 		}
-	}
+    }
 	return cpt;
 }
 
@@ -1081,7 +1174,164 @@ void preuve(Grille &contour,Grille &dt1,Grille &dt2,Grille &ma){
 	b.saveSVG("../../../exemple.svg");
 }
 
+void distingueIntExt(Grille &dt1,Grille &dt2,Grille &dtInt,Grille &dtExt){
+	int maxX = dt1.domain().upperBound()[0];
+	int maxY = dt1.domain().upperBound()[1];
+	int flag = 0;
+	for (int i =0;i<= maxX;i++){
+		for (int j =0;j<= maxY;j++){
+			Z2i::Point p(i,j);
+			if ((dt1(p) == 0) && (dt2(p) != 0)){
+				dtInt = dt1;
+				dtExt = dt2;
+				flag = 1;
+				break;
+			}
+			if ((dt1(p) != 0) && (dt2(p) == 0)){
+				dtInt = dt2;
+				dtExt = dt1;
+				flag = 1;
+				break;
+			}
+		}
+		if (flag) break;
+	}	
+}
 
+Grille RDTDynamique(Grille dtInt,Grille dtExt){
+	int maxX = dtInt.domain().upperBound()[0];
+	int maxY = dtInt.domain().upperBound()[1];
+	Grille result(dtInt.domain());
+	Grille dttmp = dtInt;
+	Grille oldrdt(dtInt.domain());
+	Grille rdttmp = imageRDT(dttmp,"");
+	int cpt=1;
+	do{
+		for (int i =0;i<= maxX;i++){
+			for (int j =0;j<= maxY;j++){
+				Z2i::Point p(i,j);
+				if (rdttmp(p) != 0){
+					dttmp.setValue(p,dtExt(p));
+					if (result(p) == 0)result.setValue(p,cpt);
+				}
+			}
+		}
+		cpt++;
+		oldrdt = rdttmp;
+		rdttmp = imageRDT(dttmp,"");
+	}while(nbPoints(oldrdt) != nbPoints(rdttmp)); 
+
+	Board2D b;
+	b.clear();
+	Display2DFactory::drawImage<Gray>(b, result , (unsigned int) 0 ,cpt);
+	b.saveSVG("../../../RDT_Dynamique.svg");
+	
+	return result;
+}
+
+Grille alphaFromIntGlobal(Grille &dtExt,Grille &dtIntInv,char *outputfile){
+	int maxX = dtExt.domain().upperBound()[0];
+	int maxY = dtExt.domain().upperBound()[1];
+	Grille result(dtExt.domain());
+	int maxv = 0;
+	for (int i =0;i<= maxX;i++){
+		for (int j =0;j<= maxY;j++){
+			Z2i::Point p(i,j);
+			if (dtExt(p) != 0 && dtIntInv(p) != 0){
+				if (dtIntInv(p) > maxv) maxv = dtIntInv(p); 
+			} 
+		}
+	}
+	for (int i =0;i<= maxX;i++){
+		for (int j =0;j<= maxY;j++){
+			Z2i::Point p(i,j);
+			if (dtExt(p) != 0 && dtIntInv(p) != 0){
+				result.setValue(p,100*dtIntInv(p)/maxv); 
+			} 
+		}
+	}
+	
+	Board2D b;
+	b.clear();
+	Display2DFactory::drawImage<Gray>(b, result ,0,100);
+	b.saveSVG(outputfile);
+	return result;
+}
+
+Z2i::Point findFirstCC(Grille &CC){
+	srand (time(NULL));
+	int limX = CC.domain().upperBound()[0];
+	int limY = CC.domain().upperBound()[1];
+	int x = rand()%limX,y=rand()%limY;
+	while (CC(Z2i::Point(x,y)) != 100 ) {
+		x = rand()%limX;
+		y = rand()%limY;
+	}
+	return Z2i::Point(x,y);
+}
+
+void fillCC(Z2i::Point p,Grille &CC, int x){
+	int limX = CC.domain().upperBound()[0];
+	int limY = CC.domain().upperBound()[1];
+	for (int i =0; i<4;i++){
+		Z2i::Point pt = p+regard(i);
+		if (CC(pt) == 100 && pt[0]<=limX && pt[1]<=limY) {
+			CC.setValue(pt,x);
+			fillCC(pt,CC,x);
+		} 
+	}
+}
+
+void fillCC(Grille &CC,int x){
+	fillCC(findFirstCC(CC),CC,x);
+}
+
+Grille alphaFromIntLocal(Grille &dtExt,Grille &dtIntInv,char *outputfile){
+	int maxX = dtExt.domain().upperBound()[0];
+	int maxY = dtExt.domain().upperBound()[1];
+	Grille result(dtExt.domain());
+	Grille CC(dtExt.domain());
+	for (int i =0;i<= maxX;i++){
+		for (int j =0;j<= maxY;j++){
+			Z2i::Point p(i,j);
+			if (dtExt(p) != 0 && dtIntInv(p) != 0){
+				CC.setValue(p,100); 
+			} 
+		}
+	}
+
+	int nbCC = nbComposantesConnexes(CC) ;
+	
+	for (int i = 1;i<=nbCC;i++){
+		fillCC(CC,i);
+	}
+	
+	float maxv[nbCC+1];
+
+	for (int i =0;i<= maxX;i++){
+		for (int j =0;j<= maxY;j++){
+			Z2i::Point p(i,j);
+			if (dtExt(p) != 0){
+				if (dtIntInv(p) > maxv[(int)CC(p)]) maxv[(int)CC(p)] = dtIntInv(p);
+			}
+		}
+	}
+
+	for (int i =0;i<= maxX;i++){
+		for (int j =0;j<= maxY;j++){
+			Z2i::Point p(i,j);
+			if (dtExt(p) != 0){
+				result.setValue(p,100*dtIntInv(p)/maxv[(int)CC(p)]);
+			}
+		}
+	}
+	
+	Board2D b;
+	b.clear();
+	Display2DFactory::drawImage<Gray>(b,result,0,100);
+	b.saveSVG(outputfile);
+	return result;
+}
 
 int main(int argc,char **argv){
 	if (argc != 2){
@@ -1219,6 +1469,13 @@ int main(int argc,char **argv){
 	Grille DTVM1 = imageDT(VM1,"../../../DT_VM_contour1.svg");
 	Grille DTVM2 = imageDT(VM2,"../../../DT_VM_contour2.svg");
 
+
+	Grille DTInt(DT1.domain());
+	Grille DTExt(DT1.domain());
+	distingueIntExt(DT1,DT2,DTInt,DTExt);
+
+	printImageColor(DTInt,"../../../DT_contourInt.svg");
+	printImageColor(DTExt,"../../../DT_contourExt.svg");
 	//Calcul de la moyenne et la différence des 2DT
 	
 	computeDTAverage(DT1,DT2,"../../../DT_contourAv.svg");
@@ -1249,16 +1506,20 @@ int main(int argc,char **argv){
 	//Grille RDT_HMA = imageRDT(HMA,"../../../RDT_HMA.svg");
 	
 		//Algo de l'alpha axe médian
-	Grille alphaMA = imageAlphaAM(DTVM1,DTVM2,0.0,"../../../alphaAM_alpha=0.0.svg");
+	//Grille alphaMA = imageAlphaAM(DTVM1,DTVM2,0.0,"../../../alphaAM_alpha=0.0.svg");
 	//Grille alphaMA2 = imageAlphaAM(DT1,DT2,1.0,"../../../alphaAM_alpha=1.0.svg");
 	//Grille alphaMA3 = imageAlphaAM(DT1,DT2,0.5,"../../../alphaAM_alpha=0.5.svg");
 	//allFAlpha(DT1,DT2,0.1,"../../../allFAlphaAM.svg","../../../allFAlphaRDT.svg");
-	Grille PM1 = imagePowerMap(DTVM1,"../../../PM_contour1.svg");
-	Grille PM2 = imagePowerMap(DTVM2,"../../../PM_contour2.svg");
+
+	
+    	//printImageNB(DTIntNeg,"../../../Inverse.svg");
+	//Voronoi2D VMIntNeg = voronoiMap(DTIntNeg,"","");
+    	//Grille DTIntInv = imageDT(VMIntNeg,"../../../DT_inv_contourInt.svg");
+    	//Grille alphaMin = imageAlphaMin(DTInt,DTExt,DTIntInv,"../../../alphaMin.svg");
 	
 	//Grille RDT_alphaMA = imageRDT(alphaMA,"../../../RDT_alphaAM_alpha=0.0.svg");
 	//Grille RDT_alphaMA2 = imageRDT(alphaMA2,"../../../RDT_alphaAM_alpha=1.0.svg");
-	//Grille RDT_alphaMA3 = imageRDT(alphaMA3,"../../../RDT_alphaAM_alpha=0.5.svg");
+	//Grille RDT_alphaMA3 = imageRDT(alphpas que j allais lancer la troisième guerre mondiale :) aMA3,"../../../RDT_alphaAM_alpha=0.5.svg");
 		//Algo de l'alpha-beta axe médian
 	//Grille alphaBetaMA = imageAlphaBetaAM(DT1,DT2,0.0,0.0,"../../../alphabetaAM_alpha=0.0_beta=0.0.svg");
 	//Grille alphaBetaMA2 = imageAlphaBetaAM(DT1,DT2,1.0,1.0,"../../../alphabetaAM_alpha=1.0_beta=1.0.svg");
@@ -1266,6 +1527,14 @@ int main(int argc,char **argv){
 	//Grille RDT_alphaBetaMA = imageRDT(alphaBetaMA,"../../../RDT_alphabetaAM_alpha=0.0_beta=0.0.svg");
 	//Grille RDT_alphaBetaMA2 = imageRDT(alphaBetaMA2,"../../../RDT_alphabetaAM_alpha=1.0_beta=1.0.svg");
 	
+	distingueIntExt(DTVM1,DTVM2,DTInt,DTExt);
+	Grille RDTdym = RDTDynamique(DTInt,DTExt);
+	Grille DTIntNeg = negatif(DTInt);
+	//cout << nbComposantesConnexes(DTInt) << endl ;
+	Voronoi2D VMIntNeg = voronoiMap(DTIntNeg,"","");
+    	Grille DTIntInv = imageDT(VMIntNeg,"../../../DT_inv_contourInt.svg");
+	Grille alphasGlo = alphaFromIntGlobal(DTExt,DTIntInv,"../../../alphasGlobal.svg");
+	Grille alphasLoc = alphaFromIntLocal(DTExt,DTIntInv,"../../../alphasLocal.svg");
 	//Création d'un contour avec boules réduites
 	//contourBallReduced(x,y,noiseLevel,freeman,valMaxX+20,valMaxY+20); 
 	
