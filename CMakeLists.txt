@@ -2,6 +2,10 @@
 # -----------------------------------------------------------------------------
 # Project definition
 # -----------------------------------------------------------------------------
+SET(DGTAL_TOOLS_SRC
+    morphomat
+)
+
 PROJECT(DGtalTools)
 
 cmake_minimum_required (VERSION 2.6) 
