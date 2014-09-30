@@ -107,6 +107,7 @@ void readData(char *filename,vector<int>&x ,vector<int>&y ,vector<int>&noiseLeve
 } 
 
 /* Ces deux fonctions créent un fichier SVG à partir d'une grille. le facteur est optionnel et permet  de diviser toutes les valeurs d'une grille par le même nombre.
+   NB : Remplissage ok , mais artéfact sur les contours
    Entrée : une grille
    Sortie : un fichier SVG
 */
@@ -226,6 +227,7 @@ void getContours(vector< vector< Z2i::Point >  >&  contours,Grille &image,vector
 	int direction2 = 0;
 	// extraction des contours
 	do{
+		//extraction du premier contour
 		for (int i=0;i<3;i++){ 
 			if (tmp(currentPT+regard((direction+i)%4)) == 0) {
 				currentPT += regard((direction+i)%4);
@@ -246,6 +248,7 @@ void getContours(vector< vector< Z2i::Point >  >&  contours,Grille &image,vector
 			if (nb < 8) cont2.push_back(p);
 		}
 	}
+	// Soustraction des points du premier contour
 	for (int u = 0; u< cont1.size() ; u++){
 		tmp.setValue(cont1[u],128);
 	}
@@ -276,6 +279,7 @@ bool isInside(Grille &image,Z2i::Point p){
 	int limY = image.domain().upperBound()[1];
 	int L=0,R=0,U=0,D=0;
 	int a,b;
+	// Vers la droite
 	for (int i = p[0]+1 ; i<=limX ; i++){
 		if (image(Z2i::Point(i,p[1])) == 128 ){
 			if (( image(Z2i::Point(i,p[1]+1)) == 128 ) && ( image(Z2i::Point(i,p[1]-1)) == 128 )) R++;
@@ -289,6 +293,7 @@ bool isInside(Grille &image,Z2i::Point p){
 			}
 		}  
 	}
+	// vers la gauche
 	for (int i = p[0]-1 ; i>=0 ; i--){
 		if (image(Z2i::Point(i,p[1])) == 128 ){
 			if (( image(Z2i::Point(i,p[1]+1)) == 128 ) && ( image(Z2i::Point(i,p[1]-1)) == 128 )) L++;
@@ -302,6 +307,7 @@ bool isInside(Grille &image,Z2i::Point p){
 			}
 		}  
 	}
+	// vers le bas
 	for (int i = p[1]+1 ; i<=limY ; i++){
 		if (image(Z2i::Point(p[0],i)) == 128 ){
 			if (( image(Z2i::Point(p[0]+1,i)) == 128 ) && ( image(Z2i::Point(p[0]-1,i)) == 128 )) D++;
@@ -315,6 +321,7 @@ bool isInside(Grille &image,Z2i::Point p){
 			}
 		}  
 	}
+	// vers le haut
 	for (int i = p[1]-1 ; i>=0 ; i--){
 		if (image(Z2i::Point(p[0],i)) == 128 ){
 			if (( image(Z2i::Point(p[0]+1,i)) == 128 ) && ( image(Z2i::Point(p[0]-1,i)) == 128 )) U++;
@@ -328,6 +335,7 @@ bool isInside(Grille &image,Z2i::Point p){
 			}
 		}  
 	}
+	//un point est à l'interieur si il coupe 
 	return ( (U%2==1) && (R%2==1) && (L%2==1) && (D%2==1) );	
 }
 
@@ -347,7 +355,7 @@ Z2i::Point findGerme(Grille &image){
 	return Z2i::Point(x,y);
 } 
 
-/* Remplit la forme  
+/* Remplit la forme définie par son contour 
    Entrée : le contour de la forme et un point de départ.
    Sortie : la forme remplie
 */
@@ -380,7 +388,7 @@ void constructImage(vector< Z2i::Point >& contour,Grille& image){
 	
 	
 }
-/*Réduit l'épaisseur du contour imprécis
+/*Réduit l'épaisseur du contour imprécis en se basant sur le niveau de précision
   Entrée : les coordonnées des points , leur niveau de bruit et le code de freeman 
   Sortie : le contour imprécis réduit
 */
@@ -505,17 +513,17 @@ void contourBallReduced(vector<int>& x,vector<int>& y,vector<int>& noiseLevel,ve
 
 /* Calcule la transformée en distance d'une forme
    Entrée : la forme
-   Sortie : sa transformée en distance
+   Sortie : sa transformée en distance approximative en float
 */
 
-Grille imageDT(Grille& image,char *outputfile){
-	PointPredicate predicate(image,0);
-	int maxX = image.domain().upperBound()[0];
-	int maxY = image.domain().upperBound()[1];
+Grille imageDT(Grille& forme,char *outputfile){
+	PointPredicate predicate(forme,0);
+	int maxX = forme.domain().upperBound()[0];
+	int maxY = forme.domain().upperBound()[1];
 	Z2i::Point lower(0,0);
 	Z2i::Point upper(maxX,maxY);
 	Grille result(Z2i::Domain(lower,upper));
-	DTL2 dt(image.domain(), predicate, Z2i::l2Metric);
+	DTL2 dt(forme.domain(), predicate, Z2i::l2Metric);
 	
 	int maxv = 0;
 	for (int i=0;i<maxX;i++){
@@ -534,15 +542,15 @@ Grille imageDT(Grille& image,char *outputfile){
 
 /*Calcule le carré la transformée en distance d'une forme
    Entrée : le diagramme de Voronoi de la forme
-   Sortie : sa transformée en distance au carré
+   Sortie : sa transformée en distance au carré en entier
 */
-Grille imageDT(Voronoi2D& image,char *outputfile){
-	Grille result(image.domain());
+Grille imageDT(Voronoi2D& voronoi,char *outputfile){
+	Grille result(voronoi.domain());
 	int maxv=0;
-	for(Voronoi2D::Domain::ConstIterator it = image.domain().begin(),
-      	itend = image.domain().end(); it != itend; ++it)
+	for(Voronoi2D::Domain::ConstIterator it = voronoi.domain().begin(),
+      	itend = voronoi.domain().end(); it != itend; ++it)
   	{
-   		Voronoi2D::Value site = image( *it );   //closest site to (*it)
+   		Voronoi2D::Value site = voronoi( *it );   //closest site to (*it)
 		if (site != *it){
 			Z2i::Point p(site[0]-(*it)[0],site[1]-(*it)[1]);
 			result.setValue((*it),p[0]*p[0]+p[1]*p[1]);
@@ -557,17 +565,17 @@ Grille imageDT(Voronoi2D& image,char *outputfile){
 	return result;
 } 
 
-/*Calcule le diagramme de Voronoi d'une forme
+/* Calcule le diagramme de Voronoi d'une forme
    Entrée : la forme
    Sortie : son diagramme de Voronoi
 */
 
-Voronoi2D voronoiMap(Grille& image,char *outputfile,char* outputfileCells){
+Voronoi2D voronoiMap(Grille& forme,char *outputfile,char* outputfileCells){
 	
-	Z2i::DigitalSet set(image.domain());
+	Z2i::DigitalSet set(forme.domain());
 
-	for (int i=0;i<=image.domain().upperBound()[0];i++){
-		for (int j=0;j<=image.domain().upperBound()[1];j++){
+	for (int i=0;i<=forme.domain().upperBound()[0];i++){
+		for (int j=0;j<=forme.domain().upperBound()[1];j++){
 			Z2i::Point p(i,j);
 			if (image(p) == 0) set.insertNew(p);
 		}
@@ -576,11 +584,11 @@ Voronoi2D voronoiMap(Grille& image,char *outputfile,char* outputfileCells){
 	NotPredicate notSetPred(set);
 	
 	L2Metric l2;
-	Voronoi2D voronoimap(image.domain(),notSetPred,l2);
+	Voronoi2D voronoimap(forme.domain(),notSetPred,l2);
 	
 	Board2D board;
 	board.clear();
-	board << image.domain() << set;
+	board << forme.domain() << set;
 	for(Voronoi2D::Domain::ConstIterator it = voronoimap.domain().begin(),
       	itend = voronoimap.domain().end(); it != itend; ++it)
   	{
@@ -607,17 +615,17 @@ Voronoi2D voronoiMap(Grille& image,char *outputfile,char* outputfileCells){
    Sortie : Leur moyenne
 */ 
 
-void computeDTAverage(Grille & image1,Grille & image2,char* outputfile){
+void computeDTAverage(Grille & dt1,Grille & dt2,char* outputfile){
 	Z2i::Point lower(0,0);
-	int maxX = image1.domain().upperBound()[0];
-	int maxY = image1.domain().upperBound()[1];
+	int maxX = dt1.domain().upperBound()[0];
+	int maxY = dt1.domain().upperBound()[1];
 	Z2i::Point upper(maxX,maxY);
 	Grille DTAv(Z2i::Domain(lower,upper));
 	Board2D boardAv;
 	for (int i = 0;i<=maxX; i++){
 		for (int j = 0;j<=maxY; j++){
 			Z2i::Point p(i,j);
-			DTAv.setValue(p,(image1(p)+image2(p))/2);
+			DTAv.setValue(p,(dt1(p)+dt2(p))/2);
 		} 
 	} 
 
@@ -634,18 +642,18 @@ void computeDTAverage(Grille & image1,Grille & image2,char* outputfile){
    Sortie : Leur différence
 */ 
 
-void computeDTDiff(Grille & image1,Grille & image2,char* outputfile){
+void computeDTDiff(Grille & dt1,Grille & dt2,char* outputfile){
 	Z2i::Point lower(0,0);
-	int maxX = image1.domain().upperBound()[0];
-	int maxY = image1.domain().upperBound()[1];
+	int maxX = dt1.domain().upperBound()[0];
+	int maxY = dt1.domain().upperBound()[1];
 	Z2i::Point upper(maxX,maxY);
 	Grille DTDiff(Z2i::Domain(lower,upper));
 	Board2D boardDiff;
 	for (unsigned int i = 0;i<=maxX; i++){
 		for (unsigned int j = 0;j<=maxY; j++){
 			Z2i::Point p(i,j);
-			if (image1(p)>image2(p)) DTDiff.setValue(p,image1(p)-image2(p));
-			else DTDiff.setValue(p,image2(p)-image1(p));
+			if (dt1(p)>dt2(p)) DTDiff.setValue(p,dt1(p)-dt2(p));
+			else DTDiff.setValue(p,dt2(p)-dt1(p));
 		} 
 	} 
 
@@ -662,15 +670,15 @@ void computeDTDiff(Grille & image1,Grille & image2,char* outputfile){
    Sortie : la reconstruction associée
 */
 
-Grille imageRDT(Grille& image,char* outputfile){
+Grille imageRDT(Grille& dt,char* outputfile){
 	
 	Z2i::L2PowerMetric l2power;
 
-	RDT reverseDT(&image.domain(),&image,&l2power);
+	RDT reverseDT(&dt.domain(),&dt,&l2power);
 	
-	Grille result (image.domain());
-	for (int i = 0;i<=image.domain().upperBound()[0];i++){
-		for (int j = 0;j<=image.domain().upperBound()[1];j++){
+	Grille result (dt.domain());
+	for (int i = 0;i<=dt.domain().upperBound()[0];i++){
+		for (int j = 0;j<=dt.domain().upperBound()[1];j++){
 			Z2i::Point p(i,j);
 			if (reverseDT(p) < 0 ) result.setValue(p,2);
 		}
@@ -689,7 +697,7 @@ Grille imageRDT(Grille& image,char* outputfile){
    Sortie : la reconstruction associée
 */ 
 
-Grille imageRDT(Grille& AM,Grille &DT,char* outputfile){
+Grille imageRDTWithAM(Grille& AM,Grille &DT,char* outputfile){
 	
 	Grille image(AM.domain());
 	int maxX = AM.domain().upperBound()[0];
@@ -726,9 +734,9 @@ Grille imageRDT(Grille& AM,Grille &DT,char* outputfile){
 */
 
 
-Grille imageAM(Grille& image,char *outputfile){
-	Z2i::Domain domain(Z2i::Point(0,0),image.domain().upperBound());
-  	Z2i::Domain domainLarge(Z2i::Point(0,0),image.domain().upperBound());
+Grille imageAM(Grille& dt,char *outputfile){
+	Z2i::Domain domain(Z2i::Point(0,0),dt.domain().upperBound());
+  	Z2i::Domain domainLarge(Z2i::Point(0,0),dt.domain().upperBound());
 	
 	/*Grille im(domain);
 	for (int i = 0;i<=image.domain().upperBound()[0];i++){
@@ -740,11 +748,11 @@ Grille imageAM(Grille& image,char *outputfile){
 	 
 	
 	Z2i::L2PowerMetric l2power;
-  	PowerMap<Grille, Z2i::L2PowerMetric> power(&domainLarge, &image, &l2power);
+  	PowerMap<Grille, Z2i::L2PowerMetric> power(&domainLarge, &dt, &l2power);
 	
 	ReducedMedialAxis<PowerMap<Grille, Z2i::L2PowerMetric> >::Type  rdma = ReducedMedialAxis< PowerMap<Grille, Z2i::L2PowerMetric> >::getReducedMedialAxisFromPowerMap(power);
 	float maxv = 0;
-	Grille result(Z2i::Domain(image.domain().lowerBound(),image.domain().upperBound()));
+	Grille result(Z2i::Domain(dt.domain().lowerBound(),dt.domain().upperBound()));
 	for (int i = 0;i<=result.domain().upperBound()[0];i++){
 		for (int j = 0;j<=result.domain().upperBound()[1];j++){
 			Z2i::Point p(i,j);
@@ -766,17 +774,17 @@ Grille imageAM(Grille& image,char *outputfile){
    Sortie : la forme amincie
 */
 
-Grille homotopicThinning(Grille &image,char *outputfile){
-	PointPredicate predicate(image,0);
+Grille homotopicThinning(Grille &forme,char *outputfile){
+	PointPredicate predicate(forme,0);
 	Z2i::Point lower(0,0);
-	Z2i::Point upper(image.domain().upperBound()[0],image.domain().upperBound()[1]);
-	DTL2 dt(image.domain(), predicate, Z2i::l2Metric);
+	Z2i::Point upper(forme.domain().upperBound()[0],forme.domain().upperBound()[1]);
+	DTL2 dt(forme.domain(), predicate, Z2i::l2Metric);
 	Domain domain( lower, upper );
 	DigitalSet set( domain );
-	for (int i = 0; i<=image.domain().upperBound()[0] ; i++){
-		for (int j = 0; j<=image.domain().upperBound()[1] ; j++){
+	for (int i = 0; i<=forme.domain().upperBound()[0] ; i++){
+		for (int j = 0; j<=forme.domain().upperBound()[1] ; j++){
 			Z2i::Point p(i,j); 
-			if (image(p) != 0) set.insertNew(p);   
+			if (forme(p) != 0) set.insertNew(p);   
 		}
 	}
 	ObjectType48 shape(Z2i::dt4_8 , set);
@@ -853,7 +861,7 @@ Grille imageAngle(Grille &i1,Grille &i2,Voronoi2D &v1,Voronoi2D &v2,char *output
 	return result;
 }
 
-/* Calcul de distance entre 2 points
+/* Calcul de la distance entre 2 points
    Entrée : 2 points
    Sortie : la distance entre les deux points 
 */
@@ -914,7 +922,7 @@ int nbComposantesConnexes(Grille &image){
 	return nbc0;
 }
 
-/* Détermine l'axe médian par simplification des hyperboules
+/* Détermine l'axe médian par simplification des hyperboules par méthode des rayons caractéristique ( voir page 19 )
    Entrée : Les deux transformées en distance 
    Sortie : l'axe médian 
 */
@@ -995,7 +1003,7 @@ Grille negatif(Grille &g){
 
 /* Determine les alpha min pour une partie de la zone hybride ( union des boules de plus grand rayon)
    Entrée : les 2 transformées en distance 
-   Sortie : les alphas pour chaque point de la zone hybride
+   Sortie : les alphas pour chaque point de la zone hybride ( voir page 14 )
 */
 
 Grille imageAlphaMin(Grille &dt1,Grille &dt2,Grille &dtinv,char *outputfile){
@@ -1013,6 +1021,7 @@ Grille imageAlphaMin(Grille &dt1,Grille &dt2,Grille &dtinv,char *outputfile){
 	Grille fm(dt1.domain()),fM(dt1.domain());
     float rm,rM,d1,d2,dinv;
 	float x,e;
+	//initialisation
 	for (int i = 0 ; i <= maxX ; i++ ){
 		for (int j = 0 ; j <= maxY ; j++ ){
 			Z2i::Point p(i,j);
@@ -1037,6 +1046,7 @@ Grille imageAlphaMin(Grille &dt1,Grille &dt2,Grille &dtinv,char *outputfile){
                         if (fm(q) <= 0 ) result.setValue(q,0.0);
                         else{
                             if (fM(q) < 0 ){
+				//calcul de la puissance
                                 x = (float)((float)(dist(p,q)-rm)/(float)(rM-rm));
                                 if (x>=0.0 && x<=1.0) result.setValue(q,(float)(min(x,result(q))));
                             }
@@ -1171,6 +1181,10 @@ Grille imageAlphaMinDynamique(Grille &dtInt,Grille &dtExt,char *outputfile){
 	return result;
 }
 
+/* Détermine les alphas avec vitesse de grossissement de boules constante
+   Entrées : 2 transformées en diastance
+   Sortie : La carte des Alphas */
+
 Grille imageAlphaMinEqual(Grille &dtInt,Grille &dtExt,char *outputfile){
 	Z2i::L2PowerMetric l2power;
 	Z2i::Domain dom = dtInt.domain();
@@ -1216,7 +1230,7 @@ Grille imageAlphaMinEqual(Grille &dtInt,Grille &dtExt,char *outputfile){
 
 /* Determine les alphas min à partir d'un axe médian
    Entrée : deux transformées en distance et l'axe médian
-   Sortie : les Alphas min
+   Sortie : les Alphas min ( voir page 14 ) 
 */ 
 
 Grille imageAlphaMinWithAM(Grille AM,Grille &dt1,Grille &dt2,Grille &dtinv,char *outputfile){
@@ -1399,7 +1413,7 @@ void allFAlpha(Grille &dt1,Grille &dt2,float step,char *outputfileAM,char *outpu
 
 /* Calcul de l'axe médian pour une union d'une boule de chaque hyperboule
    Entrée : 2 transformées en distance et deux réels alpha et béta compris entre 0 et 1
-   Sortie : L'axe médian associée
+   Sortie : L'axe médian associée 
 */
 
 Grille imageAlphaBetaAM (Grille &dt1,Grille &dt2,float alpha,float beta,char *outputfile){
@@ -1554,7 +1568,7 @@ void distingueIntExt(Grille &dt1,Grille &dt2,Grille &dtInt,Grille &dtExt){
 
 /* Calcule la reconstruction dynamique 
    Entrées : les 2 tranformées en distance 
-   Sortie : La reconstruction dynamique
+   Sortie : La reconstruction dynamique ( voir page 16 )
 */
 
 Grille RDTDynamique(Grille dtInt,Grille dtExt){
@@ -1590,7 +1604,7 @@ Grille RDTDynamique(Grille dtInt,Grille dtExt){
 
 /* Calcule la reconstruction dynamique à partir d'un axe médian 
    Entrées : les 2 tranformées en distance et un axe médian
-   Sortie : La reconstruction dynamique
+   Sortie : La reconstruction dynamique ( voir page 16 )
 */
 
 Grille RDTDynamiqueWithAM(Grille AM,Grille dtInt,Grille dtExt,char *outputfile){
@@ -1676,9 +1690,9 @@ Grille MAfromRDTDym(Grille &rdtDym,char *outputfile){
 	return result;			
 }
 
-/* Determine les alphas 
+/* Determine les alphas ( rapport entre la distance à la forme intérieure et la somme de celles à la forme intérieure et extérieure)
    Entrées : 2 transformées en distance + transformée en distance du complémentaire
-   Sortie : Les alphas
+   Sortie : Les alphas 
 
 */
 
@@ -1792,6 +1806,11 @@ Grille alphaFromIntLocal(Grille &dtExt,Grille &dtIntInv,char *outputfile){
 	return result;
 }
 
+
+/* Calcul le alpha max pour chaque étapr d'une reconstruction dynamique
+   Entrée : une reconstruction dynamique
+   Sortie : le vecteur des alphas max
+*/ 
 void alphas(vector<float> &vect,Grille &rdtDym,Grille &alpha){
 	int maxX = rdtDym.domain().upperBound()[0];
 	int maxY = rdtDym.domain().upperBound()[1];
@@ -1932,7 +1951,6 @@ Grille imageAMFromRecovering(Grille &dtInt,Grille &dtExt,Grille &recovering,char
 /* Algorithme de l'axe médian à partir de l'axe médian sur la forme intérieure
    Entrée : ensemble d'hyperboules et un paramètre alpha
    Sortie : l'axe médian 
-
 */
 
 Grille imageAMfromMin(Grille &dtInt,Grille &dtExt,Grille &dtNeg,float alpha,char *outputfile){
