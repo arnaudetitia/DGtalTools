@@ -160,6 +160,7 @@ Z2i::Point regard(int i){
 
 /* 
 A patir d'une grille, des coordonnées des points et de leur niveau de bruit, extrait les contours intérieur et extérieur
+NB : artéfacts sur un des contours gommés lors du remplissage
 Entrée : une grille du bord imprécis, la liste des coordonnées des points et leur niveau de bruit
 Sortie : Deux listes correspondants aux bords intérieurs et extérieurs
 */
@@ -1737,7 +1738,7 @@ Grille imageAlphaAM (Grille &dt1,Grille &dt2,float alpha,char *outputfile){
 
 /* Calcul de l'axe médian pour une union d'une boule de chaque hyperboule
    Entrée : 2 transformées en distance et deux réels alpha et béta compris entre 0 et 1
-   Sortie : L'axe médian associée 
+   Sortie : L'axe médian associé 
 */
 
 Grille imageAlphaBetaAM (Grille &dt1,Grille &dt2,float alpha,float beta,char *outputfile){
