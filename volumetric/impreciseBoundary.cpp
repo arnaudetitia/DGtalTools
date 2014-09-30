@@ -174,7 +174,7 @@ void getContours(vector< vector< Z2i::Point >  >&  contours,Grille &image,vector
 			if (image(p) == 0) image_set.insertNew(p); 
     		}
 	}
-	
+	// Recherche des bords des contours imprécis
 	Adj4 adj4;
 	Adj8 adj8;
 	DT4_8 dt4_8 ( adj4, adj8, JORDAN_DT );
@@ -278,7 +278,8 @@ bool isInside(Grille &image,Z2i::Point p){
 	int limX = image.domain().upperBound()[0];
 	int limY = image.domain().upperBound()[1];
 	int L=0,R=0,U=0,D=0;
-	int a,b;
+	int a,b; 
+	//un point est à l'interieur si il coupe le contour un nombre impair de fois
 	// Vers la droite
 	for (int i = p[0]+1 ; i<=limX ; i++){
 		if (image(Z2i::Point(i,p[1])) == 128 ){
@@ -335,7 +336,6 @@ bool isInside(Grille &image,Z2i::Point p){
 			}
 		}  
 	}
-	//un point est à l'interieur si il coupe 
 	return ( (U%2==1) && (R%2==1) && (L%2==1) && (D%2==1) );	
 }
 
@@ -832,7 +832,7 @@ Grille homotopicThinning(Grille &forme,char *outputfile){
 }
 
 #define PI 3.14159265
-/* Determine l'angle dont l'origine est le point de la forme et les deux autres points sont les points les plus proches, un sur le bord intérieur, lautre sur le bord extérieur// utilisation du théorème d'Al-Kashi
+/* Determine l'angle dont l'origine est le point de la forme et les deux autres points sont les points les plus proches, un sur le bord intérieur, lautre sur le bord extérieur / utilisation du théorème d'Al-Kashi
    Entrée : Les deux formes accompagné de leur diagrammede Voronoi respectif
    Sortie : Carte des angles
 */
@@ -922,53 +922,7 @@ int nbComposantesConnexes(Grille &image){
 	return nbc0;
 }
 
-/* Détermine l'axe médian par simplification des hyperboules par méthode des rayons caractéristique ( voir page 19 )
-   Entrée : Les deux transformées en distance 
-   Sortie : l'axe médian 
-*/
-Grille imageHAM (Grille &dt1,Grille &dt2,char *outputfile){// axe médian avec hyperboules
-	Grille result(dt1.domain());
-	int maxX = dt1.domain().upperBound()[0];
-	int maxY = dt1.domain().upperBound()[1];
-	int flag;
-	int rmp,rMp,rmq,rMq,maxv=0;
-	float rcp,rcq,rcmax,taup,tauq;
-	float distance;
-	for (int i = 0 ; i <= maxX ; i++ ){
-		for (int j = 0 ; j <= maxY ; j++ ){
-			Z2i::Point p(i,j);
-			if ((dt1(p) > 0.0) && (dt2(p) > 0.0)){//Ce point appartient au contour interieur
-				flag = 0;
-				rmp = min(dt1(p),dt2(p));
-				rMp = max(dt1(p),dt2(p));
-				rcmax = 0.0;
-				for (int a = 0 ; a <= maxX ; a++ ){
-					for (int b = 0 ; b <= maxY ; b++ ){
-						Z2i::Point q(a,b);
-						if ( (dt1(q) > 0.0) && (dt2(q) > 0.0) && (p != q)){
-							rmq = min(dt1(q),dt2(q));
-							rMq = max(dt1(q),dt2(q));
-							distance = dist(p,q);
-							if (distance + rMp <= rMq){
-								flag = 1;
-							}
- 						}
-					}
-				}
-				if (!flag) {  
-					result.setValue(p,1);
-					//if (result(p) > maxv) maxv = result(p);
-				} 
-			}
-		}
-	}
-	Board2D board;
-	board.clear();
-	Display2DFactory::drawImage<Gray>(board, result , 0.0 ,1);
-	board.saveSVG(outputfile);  
-	cout << maxv << endl;
-	return result;
-}
+
 
 void parabolloide(Grille &g,Z2i::Point &point,float dt,float e = 0.0){
 	int maxX = g.domain().upperBound()[0];
@@ -1001,7 +955,9 @@ Grille negatif(Grille &g){
 	return result;
 }
 
-/* Determine les alpha min pour une partie de la zone hybride ( union des boules de plus grand rayon)
+/////////////////////////////////////////////Reconstruction : calcul des alphas ////////////////////////////////////
+
+/* Determine les alphas min pour une partie de la zone hybride ( union des boules de plus grand rayon)
    Entrée : les 2 transformées en distance 
    Sortie : les alphas pour chaque point de la zone hybride ( voir page 14 )
 */
@@ -1069,47 +1025,6 @@ Grille imageAlphaMin(Grille &dt1,Grille &dt2,Grille &dtinv,char *outputfile){
 	return result;
 }
 
-/* Compte le nombre de points d'une image
-   Entrée : une image 
-   Sortie : le nombre de point qui la compose
-*/
-int nbPoints(Grille &image,float val = 0.0){
-	int cpt  =0;
-	int maxX = image.domain().upperBound()[0];
-	int maxY = image.domain().upperBound()[1];
-	for (int i =0;i<= maxX;i++){
-		for (int j =0;j<= maxY;j++){
-			Z2i::Point p(i,j);
-			cpt += (image(p) != val);
-		}
-    }
-	return cpt;
-}
-/* Compte le nombre de zone qui contient au moins un point
-   Entrée : une image et un rayon
-   Sortie : le nombre de zones 
-*/
-int nbZones(Grille &image,int r,float val = 0.0){
-	int cpt  =0;
-	int X,Y,R=2*r+1,flag;
-	int maxX = image.domain().upperBound()[0];
-	int maxY = image.domain().upperBound()[1];
-	for (int i =0;i< maxX/R;i++){
-		for (int j =0;j< maxY/R;j++){
-			X=r+i*R;
-			Y=r+j*R;
-			flag =0;
-			for (int a = 0;a<R;a++){
-				for (int b = 0;b<R;b++){
-					Z2i::Point p(X+a-r,Y+b-r);
-					if (image(p) != val) {cpt++;flag=1;break;}
-				}
-				if (flag) break;
-			}
-		}
-    }
-	return cpt;
-}
 
 /* Determine les alpha min pour l'intégralité des points de la zone hybride
    Entrée : les 2 transformées en distance 
@@ -1129,8 +1044,8 @@ Grille imageAlphaMinDynamique(Grille &dtInt,Grille &dtExt,char *outputfile){
 	}
 	int oldN=0,newN=1;
 	float rm,rM,d,x;
-	while (oldN != newN){
-		oldN = newN;
+	while (oldN != newN){ // tant qu'on augmente le nombre de points, on continue
+		oldN = newN; 
 		for (int i = 0 ; i <= maxX ; i++ ){
 			for (int j = 0 ; j <= maxY ; j++ ){
 				Z2i::Point p(i,j);
@@ -1228,6 +1143,8 @@ Grille imageAlphaMinEqual(Grille &dtInt,Grille &dtExt,char *outputfile){
 	return result;
 }
 
+
+
 /* Determine les alphas min à partir d'un axe médian
    Entrée : deux transformées en distance et l'axe médian
    Sortie : les Alphas min ( voir page 14 ) 
@@ -1295,72 +1212,85 @@ Grille imageAlphaMinWithAM(Grille AM,Grille &dt1,Grille &dt2,Grille &dtinv,char 
 	return result;
 }
 
-/* Calcul de l'axe médian pour une union d'une boule de chaque hyperboule
-   Entrée : 2 transformées en distance et un réel alpha compris entre 0 et 1
-   Sortie : L'axe médian associée
+
+/* Compte le nombre de points d'une image
+   Entrée : une image 
+   Sortie : le nombre de point qui la compose
+*/
+int nbPoints(Grille &image,float val = 0.0){
+	int cpt  =0;
+	int maxX = image.domain().upperBound()[0];
+	int maxY = image.domain().upperBound()[1];
+	for (int i =0;i<= maxX;i++){
+		for (int j =0;j<= maxY;j++){
+			Z2i::Point p(i,j);
+			cpt += (image(p) != val);
+		}
+    }
+	return cpt;
+}
+/* Compte le nombre de zone qui contient au moins un point
+   Entrée : une image et un rayon
+   Sortie : le nombre de zones 
+*/
+int nbZones(Grille &image,int r,float val = 0.0){
+	int cpt  =0;
+	int X,Y,R=2*r+1,flag;
+	int maxX = image.domain().upperBound()[0];
+	int maxY = image.domain().upperBound()[1];
+	for (int i =0;i< maxX/R;i++){
+		for (int j =0;j< maxY/R;j++){
+			X=r+i*R;
+			Y=r+j*R;
+			flag =0;
+			for (int a = 0;a<R;a++){
+				for (int b = 0;b<R;b++){
+					Z2i::Point p(X+a-r,Y+b-r);
+					if (image(p) != val) {cpt++;flag=1;break;}
+				}
+				if (flag) break;
+			}
+		}
+    }
+	return cpt;
+}
+
+/* Determine les alphas ( rapport entre la distance à la forme intérieure et la somme de celles à la forme intérieure et extérieure)
+   Entrées : 2 transformées en distance + transformée en distance du complémentaire
+   Sortie : Les alphas 
+
 */
 
-Grille imageAlphaAM (Grille &dt1,Grille &dt2,float alpha,char *outputfile){
-	assert(alpha<=1.0);
-	assert(alpha>=0.0);
-	Grille input(dt1.domain());
-	int maxX = dt1.domain().upperBound()[0];
-	int maxY = dt1.domain().upperBound()[1];
-	int rm,rM; 
-	// Formule pour le calcul de l'axe médian
-	for (int i = 0 ; i <= maxX ; i++ ){
-		for (int j = 0 ; j <= maxY ; j++ ){
+Grille alphaFromIntGlobal(Grille &dtExt,Grille &dtIntInv,char *outputfile){
+	int maxX = dtExt.domain().upperBound()[0];
+	int maxY = dtExt.domain().upperBound()[1];
+	Grille result(dtExt.domain());
+	int maxv = 0;
+	for (int i =0;i<= maxX;i++){
+		for (int j =0;j<= maxY;j++){
 			Z2i::Point p(i,j);
-			if (dt1(p) > 0 && dt2(p) >0 ){
-				rm = min(dt1(p),dt2(p));
-				rM = max(dt1(p),dt2(p));
-				input.setValue(p,alpha*rM + (1.0-alpha) * rm);
-			}
+			if (dtExt(p) != 0 && dtIntInv(p) != 0){
+				if (dtIntInv(p) > maxv) maxv = dtIntInv(p); 
+			} 
 		}
 	}
-	Grille result(dt1.domain());
-	int flag;
-	int maxv=0;
-	for (int ia = 0;ia<= maxX;ia++){
-		for (int ja = 0;ja<= maxY;ja++){
-			Z2i::Point p(ia,ja);
-			if (input(p) != 0){
-				flag = 0;
-				for (int ib = 0;ib<= maxX;ib++){
-					for (int jb = 0;jb<= maxY;jb++){
-						Z2i::Point q(ib,jb);
-						if (input(q) != 0 && p != q){
-							//int distanceSquare = distSquare(p,q);
-							int distance = dist(p,q);
-							if ( distance >= input(q) ){
-							}
-							else {
-								if ( distance+ input(p) <= input(q) ) {
-									// la boule p est contenu dans la boule q
-									flag = 1;
-									break;
-								}
-							}
-						}
-					}
-					if (flag) break;
-				}
-				if (!flag){
-					result.setValue(p,input(p)*input(p));
-					if (result(p) >= maxv) maxv = result(p); 
-				}
-			}
+	for (int i =0;i<= maxX;i++){
+		for (int j =0;j<= maxY;j++){
+			Z2i::Point p(i,j);
+			if (dtExt(p) != 0 && dtIntInv(p) != 0){
+				result.setValue(p,100*dtIntInv(p)/maxv); 
+			} 
 		}
 	}
-
-	Board2D board;
-	board.clear();
-	Display2DFactory::drawImage<Gray>(board, result , 0.0 ,maxv+0.1);
-	board.saveSVG(outputfile);  
+	
+	Board2D b;
+	b.clear();
+	Display2DFactory::drawImage<Gray>(b, result ,0,100);
+	b.saveSVG(outputfile);
 	return result;
 }
 
-/* Calcule l'intégralité des alpha-forme 
+/* Calcule l'intégralité des alpha-formes 
    Entrée : 2 transformées en distance, un pas d'échantillonage
    Sortie : Les alphas-formes
 */
@@ -1411,71 +1341,7 @@ void allFAlpha(Grille &dt1,Grille &dt2,float step,char *outputfileAM,char *outpu
 	boardRDT.saveSVG(outputfileRDT);
 }
 
-/* Calcul de l'axe médian pour une union d'une boule de chaque hyperboule
-   Entrée : 2 transformées en distance et deux réels alpha et béta compris entre 0 et 1
-   Sortie : L'axe médian associée 
-*/
 
-Grille imageAlphaBetaAM (Grille &dt1,Grille &dt2,float alpha,float beta,char *outputfile){
-	assert(alpha<=1.0);
-	assert(alpha>=0.0);
-	assert(beta<=1.0);
-	assert(beta>=0.0);
-	Grille inputAlpha(dt1.domain());
-	Grille inputBeta(dt1.domain());
-	int maxX = dt1.domain().upperBound()[0];
-	int maxY = dt1.domain().upperBound()[1];
-	int rm,rM; 
-	for (int i = 0 ; i <= maxX ; i++ ){
-		for (int j = 0 ; j <= maxY ; j++ ){
-			Z2i::Point p(i,j);
-			if (dt1(p) > 0 && dt2(p) >0 ){
-				rm = min(dt1(p),dt2(p));
-				rM = max(dt1(p),dt2(p));
-				inputAlpha.setValue(p,alpha*rM + (1.0-alpha) * rm);
-				inputBeta.setValue(p,beta*rM + (1.0-beta) * rm);
-			}
-		}
-	}
-	Grille result(dt1.domain());
-	int flag;
-	float maxv=0;
-	for (int ia = 0;ia<= maxX;ia++){
-		for (int ja = 0;ja<= maxY;ja++){
-			Z2i::Point p(ia,ja);
-			if (inputAlpha(p) != 0){
-				flag = 0;
-				for (int ib = 0;ib<= maxX;ib++){
-					for (int jb = 0;jb<= maxY;jb++){
-						Z2i::Point q(ib,jb);
-						if (inputBeta(q) != 0 && p != q){
-							int distance = (int)dist(p,q);
-							if ( distance >= inputBeta(q) ){NULL;}
-							else {
-								if (distance + inputAlpha(p) <= inputBeta(q)){
-									// la boule p est contenu dans la boule q
-									flag = 1;
-									break;
-								}
-							}
-						}
-					}
-					if (flag) break;
-				}
-				if (!flag){
-					result.setValue(p,inputAlpha(p) * inputAlpha(p));
-					if (result(p) >= maxv) maxv = result(p); 
-				}
-			}
-		}
-	}
-
-	Board2D board;
-	board.clear();
-	Display2DFactory::drawImage<Gray>(board, result , 0.0 ,maxv+0.1);
-	board.saveSVG(outputfile);  
-	return result;
-}
 
 void preuve(Grille &contour,Grille &dt1,Grille &dt2,Grille &ma){
 	int maxX = dt1.domain().upperBound()[0];
@@ -1644,7 +1510,7 @@ Grille RDTDynamiqueWithAM(Grille AM,Grille dtInt,Grille dtExt,char *outputfile){
 	return result;
 }
 
-/*Calcule les axe médian à partir d'une rconstruction dynamique
+/*Calcule les axes médians à partir d'une reconstruction dynamique
   Entrée : une reconstruction dynamique
   Sortie : Les différents axes médians
 */ 
@@ -1690,40 +1556,7 @@ Grille MAfromRDTDym(Grille &rdtDym,char *outputfile){
 	return result;			
 }
 
-/* Determine les alphas ( rapport entre la distance à la forme intérieure et la somme de celles à la forme intérieure et extérieure)
-   Entrées : 2 transformées en distance + transformée en distance du complémentaire
-   Sortie : Les alphas 
 
-*/
-
-Grille alphaFromIntGlobal(Grille &dtExt,Grille &dtIntInv,char *outputfile){
-	int maxX = dtExt.domain().upperBound()[0];
-	int maxY = dtExt.domain().upperBound()[1];
-	Grille result(dtExt.domain());
-	int maxv = 0;
-	for (int i =0;i<= maxX;i++){
-		for (int j =0;j<= maxY;j++){
-			Z2i::Point p(i,j);
-			if (dtExt(p) != 0 && dtIntInv(p) != 0){
-				if (dtIntInv(p) > maxv) maxv = dtIntInv(p); 
-			} 
-		}
-	}
-	for (int i =0;i<= maxX;i++){
-		for (int j =0;j<= maxY;j++){
-			Z2i::Point p(i,j);
-			if (dtExt(p) != 0 && dtIntInv(p) != 0){
-				result.setValue(p,100*dtIntInv(p)/maxv); 
-			} 
-		}
-	}
-	
-	Board2D b;
-	b.clear();
-	Display2DFactory::drawImage<Gray>(b, result ,0,100);
-	b.saveSVG(outputfile);
-	return result;
-}
 
 Z2i::Point findFirstCC(Grille &CC){
 	srand (time(NULL));
@@ -1807,7 +1640,7 @@ Grille alphaFromIntLocal(Grille &dtExt,Grille &dtIntInv,char *outputfile){
 }
 
 
-/* Calcul le alpha max pour chaque étapr d'une reconstruction dynamique
+/* Calcul le alpha max pour chaque étape d'une reconstruction dynamique
    Entrée : une reconstruction dynamique
    Sortie : le vecteur des alphas max
 */ 
@@ -1831,6 +1664,190 @@ void alphas(vector<float> &vect,Grille &rdtDym,Grille &alpha){
 			}  
 		}
 	} 
+}
+
+
+///////////////////////////////// Calcul de l'axe médian ////////////////////////////////
+
+/* Calcul de l'axe médian pour une union d'une boule de chaque hyperboule
+   Entrée : 2 transformées en distance et un réel alpha compris entre 0 et 1
+   Sortie : L'axe médian associée
+*/
+
+Grille imageAlphaAM (Grille &dt1,Grille &dt2,float alpha,char *outputfile){
+	assert(alpha<=1.0);
+	assert(alpha>=0.0);
+	Grille input(dt1.domain());
+	int maxX = dt1.domain().upperBound()[0];
+	int maxY = dt1.domain().upperBound()[1];
+	int rm,rM; 
+	// Formule pour le calcul de l'axe médian
+	for (int i = 0 ; i <= maxX ; i++ ){
+		for (int j = 0 ; j <= maxY ; j++ ){
+			Z2i::Point p(i,j);
+			if (dt1(p) > 0 && dt2(p) >0 ){
+				rm = min(dt1(p),dt2(p));
+				rM = max(dt1(p),dt2(p));
+				input.setValue(p,alpha*rM + (1.0-alpha) * rm);
+			}
+		}
+	}
+	Grille result(dt1.domain());
+	int flag;
+	int maxv=0;
+	for (int ia = 0;ia<= maxX;ia++){
+		for (int ja = 0;ja<= maxY;ja++){
+			Z2i::Point p(ia,ja);
+			if (input(p) != 0){
+				flag = 0;
+				for (int ib = 0;ib<= maxX;ib++){
+					for (int jb = 0;jb<= maxY;jb++){
+						Z2i::Point q(ib,jb);
+						if (input(q) != 0 && p != q){
+							//int distanceSquare = distSquare(p,q);
+							int distance = dist(p,q);
+							if ( distance >= input(q) ){
+							}
+							else {
+								if ( distance+ input(p) <= input(q) ) {
+									// la boule p est contenu dans la boule q
+									flag = 1;
+									break;
+								}
+							}
+						}
+					}
+					if (flag) break;
+				}
+				if (!flag){
+					result.setValue(p,input(p)*input(p));
+					if (result(p) >= maxv) maxv = result(p); 
+				}
+			}
+		}
+	}
+
+	Board2D board;
+	board.clear();
+	Display2DFactory::drawImage<Gray>(board, result , 0.0 ,maxv+0.1);
+	board.saveSVG(outputfile);  
+	return result;
+}
+
+
+/* Calcul de l'axe médian pour une union d'une boule de chaque hyperboule
+   Entrée : 2 transformées en distance et deux réels alpha et béta compris entre 0 et 1
+   Sortie : L'axe médian associée 
+*/
+
+Grille imageAlphaBetaAM (Grille &dt1,Grille &dt2,float alpha,float beta,char *outputfile){
+	assert(alpha<=1.0);
+	assert(alpha>=0.0);
+	assert(beta<=1.0);
+	assert(beta>=0.0);
+	Grille inputAlpha(dt1.domain());
+	Grille inputBeta(dt1.domain());
+	int maxX = dt1.domain().upperBound()[0];
+	int maxY = dt1.domain().upperBound()[1];
+	int rm,rM; 
+	for (int i = 0 ; i <= maxX ; i++ ){
+		for (int j = 0 ; j <= maxY ; j++ ){
+			Z2i::Point p(i,j);
+			if (dt1(p) > 0 && dt2(p) >0 ){
+				rm = min(dt1(p),dt2(p));
+				rM = max(dt1(p),dt2(p));
+				inputAlpha.setValue(p,alpha*rM + (1.0-alpha) * rm);
+				inputBeta.setValue(p,beta*rM + (1.0-beta) * rm);
+			}
+		}
+	}
+	Grille result(dt1.domain());
+	int flag;
+	float maxv=0;
+	for (int ia = 0;ia<= maxX;ia++){
+		for (int ja = 0;ja<= maxY;ja++){
+			Z2i::Point p(ia,ja);
+			if (inputAlpha(p) != 0){
+				flag = 0;
+				for (int ib = 0;ib<= maxX;ib++){
+					for (int jb = 0;jb<= maxY;jb++){
+						Z2i::Point q(ib,jb);
+						if (inputBeta(q) != 0 && p != q){
+							int distance = (int)dist(p,q);
+							if ( distance >= inputBeta(q) ){NULL;}
+							else {
+								if (distance + inputAlpha(p) <= inputBeta(q)){
+									// la boule p est contenu dans la boule q
+									flag = 1;
+									break;
+								}
+							}
+						}
+					}
+					if (flag) break;
+				}
+				if (!flag){
+					result.setValue(p,inputAlpha(p) * inputAlpha(p));
+					if (result(p) >= maxv) maxv = result(p); 
+				}
+			}
+		}
+	}
+
+	Board2D board;
+	board.clear();
+	Display2DFactory::drawImage<Gray>(board, result , 0.0 ,maxv+0.1);
+	board.saveSVG(outputfile);  
+	return result;
+}
+
+
+/* Détermine l'axe médian par simplification des hyperboules par méthode des rayons caractéristiques ( voir page 19 )
+   Entrée : Les deux transformées en distance 
+   Sortie : l'axe médian 
+*/
+Grille imageHAM (Grille &dt1,Grille &dt2,char *outputfile){// axe médian avec hyperboules
+	Grille result(dt1.domain());
+	int maxX = dt1.domain().upperBound()[0];
+	int maxY = dt1.domain().upperBound()[1];
+	int flag;
+	int rmp,rMp,rmq,rMq,maxv=0;
+	float rcp,rcq,rcmax,taup,tauq;
+	float distance;
+	for (int i = 0 ; i <= maxX ; i++ ){
+		for (int j = 0 ; j <= maxY ; j++ ){
+			Z2i::Point p(i,j);
+			if ((dt1(p) > 0.0) && (dt2(p) > 0.0)){//Ce point appartient au contour interieur
+				flag = 0;
+				rmp = min(dt1(p),dt2(p));
+				rMp = max(dt1(p),dt2(p));
+				rcmax = 0.0;
+				for (int a = 0 ; a <= maxX ; a++ ){
+					for (int b = 0 ; b <= maxY ; b++ ){
+						Z2i::Point q(a,b);
+						if ( (dt1(q) > 0.0) && (dt2(q) > 0.0) && (p != q)){
+							rmq = min(dt1(q),dt2(q));
+							rMq = max(dt1(q),dt2(q));
+							distance = dist(p,q);
+							if (distance + rMp <= rMq){
+								flag = 1;
+							}
+ 						}
+					}
+				}
+				if (!flag) {  
+					result.setValue(p,1);
+					//if (result(p) > maxv) maxv = result(p);
+				} 
+			}
+		}
+	}
+	Board2D board;
+	board.clear();
+	Display2DFactory::drawImage<Gray>(board, result , 0.0 ,1);
+	board.saveSVG(outputfile);  
+	cout << maxv << endl;
+	return result;
 }
 
 float power(Z2i::Point centre,float r,Z2i::Point p){
@@ -1915,7 +1932,9 @@ Grille imageAMFromRecovering(Grille &dtInt,Grille &dtExt,Grille &recovering,char
 		for (int i = infX ;i <=supX ;i++){
 			for (int j = infY;j <= supY;j++){
 				Z2i::Point p(i,j);
+				// Si le point appartient à l'hyperboule
 				if (distSquare(boules[a],p) < dtExt(boules[a]) ){
+					// Si après enlèvement de l'hyperboule un point n'est plus couvert
 					if (recovering(p) <= max(dtExt(p)-dtInt(p),-power(boules[a],dtExt(boules[a]),p)) ) {
 						flag = 1;
 						//cout << recovering(p) << " " << max(dtExt(p)-dtInt(p),-power(boules[a],dtExt(boules[a]),p)) << endl;				 
@@ -1934,6 +1953,7 @@ Grille imageAMFromRecovering(Grille &dtInt,Grille &dtExt,Grille &recovering,char
 				for (int j = infY;j <= supY;j++){
 					Z2i::Point p(i,j);
 					if (distSquare(boules[a],p) < dtExt(boules[a]) ){
+						//on retire l'hyperboule
 						recovering.setValue(p,recovering(p) - max(dtExt(p)-dtInt(p),-power(boules[a],dtExt(boules[a]),p)) );
 					}
 				}
